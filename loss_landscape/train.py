@@ -28,8 +28,10 @@ from utils.nn_manipulation import count_params, flatten_grads
 from utils.reproducibility import set_seed
 from utils.resnet import get_resnet
 
+from adversarial_attack import pgd_attack_l2
+
 # "Fixed" hyperparameters
-NUM_EPOCHS = 200
+NUM_EPOCHS = 25
 # In the resnet paper they train for ~90 epoch before reducing LR, then 45 and 45 epochs.
 # We use 100-50-50 schedule here.
 LR = 0.1
@@ -105,6 +107,7 @@ if __name__ == "__main__":
         "--model", required=True, choices=["resnet20", "resnet32", "resnet44", "resnet56"]
     )
     parser.add_argument("--remove_skip_connections", action="store_true", default=False)
+    parser.add_argument("--use_adversarial_training", action="store_true", default=False)
     parser.add_argument(
         "--skip_bn_bias", action="store_true",
         help="whether to skip considering bias and batch norm params or not, Li et al do not consider bias and batch norm params"
@@ -172,6 +175,10 @@ if __name__ == "__main__":
             images = images.to(args.device)
             labels = labels.to(args.device)
 
+            # Adversarial attack to images
+            if args.use_adversarial_training:
+                images = pgd_attack_l2(model, images, labels)
+                
             # Forward pass
             outputs = model(images)
             loss = torch.nn.functional.cross_entropy(outputs, labels)
