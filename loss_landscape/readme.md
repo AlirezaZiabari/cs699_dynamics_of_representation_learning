@@ -110,3 +110,22 @@ python plot.py --result_folder figures/resnet56/ \
 ```
 
 Note: The code should be executable with loss-landscape as the root folder. 
+
+
+
+##### ADDED LATER
+
+## Train Model
+python train.py --result_folder "results/resnet56_adversarial_skip_bn_bias_remove_skip_connections/" --device cuda:0 --model resnet56 --skip_bn_bias -D --remove_skip_connections --use_adversarial_training
+
+## Test Model
+python train.py --result_folder results_final/resnet20_adversarial_skip_bn_bias_pgd --device cuda:0 --model resnet20 --skip_bn_bias --test_model
+
+## Compute trajectory
+python compute_trajectory.py -r results_final/resnet20_skip_bn_bias/trajectories --direction_file results_final/resnet20_skip_bn_bias/buffer.npy.npz --projection_file buffer_proj.npz --model resnet20  -s results_final/resnet20_skip_bn_bias/ckpt --skip_bn_bias
+
+## Compute Loss surface
+python compute_loss_surface.py --result_folder results_final/resnet20_skip_bn_bias/loss_surface/  -s results_final/resnet20_skip_bn_bias/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results_final/resnet20_skip_bn_bias/buffer.npy.npz --surface_file buffer_loss_surface.npz --device cuda:0  --xcoords 6:-0.5:0.5 --ycoords 6:-0.5:0.5
+
+## Plot 
+python plot.py --result_folder results_final/resnet20_skip_bn_bias/figures/ --trajectory_file results_final/resnet20_skip_bn_bias/trajectories/buffer_proj.npz --surface_file results_final/resnet20_skip_bn_bias/loss_surface/buffer_loss_surface.npz --plot_prefix resnet20_freq_dir_vanilla
