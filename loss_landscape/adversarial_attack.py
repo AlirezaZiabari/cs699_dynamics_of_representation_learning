@@ -5,7 +5,7 @@ Script to attack a neural network:
 import torch
 
 # miss classify the labels
-def pgd_attack(model, images, labels, eps=0.1, alpha=2/255, iters=40) :        
+def pgd_attack(model, images, labels, eps=0.1, alpha=2/255, iters=20) :        
     ori_images = images.data
         
     for i in range(iters) :
@@ -26,7 +26,7 @@ def norm_fn(x):
     return x.view(x.shape[0], -1).norm(dim=1)[:,None,None,None]
 
 
-def pgd_attack_l2(model, images, labels, eps=0.1, alpha=2/255, iters=40, delta_init_type='zeros'):
+def pgd_attack_l2(model, images, labels, eps=2, alpha=0.1, iters=20, delta_init_type='zeros'):
   '''
   Generates perturbed images for adversarial attack, with pgd_l2 (ref:https://adversarial-ml-tutorial.org/adversarial_examples/)
   Inputs:
@@ -51,7 +51,6 @@ def pgd_attack_l2(model, images, labels, eps=0.1, alpha=2/255, iters=40, delta_i
       loss.backward()
 
       delta.data += alpha*delta.grad.detach() / norm_fn(delta.grad.detach())
-      delta.data = torch.min(torch.max(delta.detach(), - images), 1 - images) # clip X+delta to [0,1]
       delta.data *= eps / norm_fn(delta.detach()).clamp(min=eps)
       delta.grad.zero_()
   
