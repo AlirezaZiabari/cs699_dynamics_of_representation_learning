@@ -25,6 +25,7 @@ def pgd_attack(model, images, labels, eps=0.1, alpha=2/255, iters=40) :
 def norm_fn(x):
     return x.view(x.shape[0], -1).norm(dim=1)[:,None,None,None]
 
+
 def pgd_attack_l2(model, images, labels, eps=0.1, alpha=2/255, iters=40, delta_init_type='zeros'):
   '''
   Generates perturbed images for adversarial attack, with pgd_l2 (ref:https://adversarial-ml-tutorial.org/adversarial_examples/)
@@ -41,7 +42,7 @@ def pgd_attack_l2(model, images, labels, eps=0.1, alpha=2/255, iters=40, delta_i
   '''
 
   if delta_init_type == 'zeros':
-      delta = torch.zeros_like(images.shape, requires_grad=True)
+      delta = torch.zeros_like(images, requires_grad=True)
   elif delta_init_type == 'random':
       delta = torch.rand_like(images, requires_grad=True)
 
