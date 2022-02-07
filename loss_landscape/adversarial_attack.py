@@ -5,7 +5,9 @@ Script to attack a neural network:
 import torch
 
 # miss classify the labels
-def pgd_attack(model, images, labels, eps=0.1, alpha=2/255, iters=20) :        
+
+def pgd_attack(model, images, labels, eps=0.1, alpha=2/255, iters=40, device='cpu') :            
+
     ori_images = images.data
         
     for i in range(iters) :
@@ -13,20 +15,25 @@ def pgd_attack(model, images, labels, eps=0.1, alpha=2/255, iters=20) :
         outputs = model(images)
 
         model.zero_grad()
-        cost = torch.nn.functional.cross_entropy(outputs, labels)
-        cost.backward()
 
+        cost = torch.nn.functional.cross_entropy(outputs.to(device), labels)
+        cost.backward()
+        
         adv_images = images + alpha * images.grad.sign()
         eta = torch.clamp(adv_images - ori_images, min=-eps, max=eps)
-        images = torch.clamp(ori_images + eta, min=0, max=1).detach_()
-            
+        # images = torch.clamp(ori_images + eta, min=0, max=1).detach_()
+        images = (ori_images + eta).detach_()
+              
     return images
+
 
 def norm_fn(x):
     return x.view(x.shape[0], -1).norm(dim=1)[:,None,None,None]
 
 
-def pgd_attack_l2(model, images, labels, eps=2, alpha=0.1, iters=20, delta_init_type='zeros'):
+
+def pgd_attack_l2(model, images, labels, eps=0.1, alpha=2/255, iters=40, delta_init_type='zeros', device='cpu'):
+
   '''
   Generates perturbed images for adversarial attack, with pgd_l2 (ref:https://adversarial-ml-tutorial.org/adversarial_examples/)
   Inputs:
@@ -47,10 +54,13 @@ def pgd_attack_l2(model, images, labels, eps=2, alpha=0.1, iters=20, delta_init_
       delta = torch.rand_like(images, requires_grad=True)
 
   for i in range(iters):
-      loss = torch.nn.functional.cross_entropy(model(images + delta), labels)
+      loss = torch.nn.functional.cross_entropy(model(images + delta).to(device), labels)
       loss.backward()
 
       delta.data += alpha*delta.grad.detach() / norm_fn(delta.grad.detach())
+
+    #   delta.data = torch.min(torch.max(delta.detach(), - images), 1 - images) # clip X+delta to [0,1]
+
       delta.data *= eps / norm_fn(delta.detach()).clamp(min=eps)
       delta.grad.zero_()
   

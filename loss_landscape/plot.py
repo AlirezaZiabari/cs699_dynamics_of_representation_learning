@@ -17,6 +17,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    loss_level_diff = 0.003
+    
     # set up logging
     os.makedirs(f"{args.result_folder}", exist_ok=True)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -36,7 +38,7 @@ if __name__ == '__main__':
         X, Y = numpy.meshgrid(xcoords, ycoords, indexing="ij")
         Z = losses
         fig = pyplot.figure()
-        CS = pyplot.contour(X, Y, Z, cmap='summer', levels=numpy.arange(0.1, 10, 0.5))
+        CS = pyplot.contour(X, Y, Z, cmap='summer', levels=numpy.arange(losses.min(), losses.max(), loss_level_diff)) ## THIS WILL BE CHANGED
         pyplot.clabel(CS, inline=1, fontsize=8)
         fig.savefig(
             f"{args.result_folder}/{args.plot_prefix}_surface_2d_contour", dpi=300,
@@ -76,7 +78,7 @@ if __name__ == '__main__':
         X, Y = numpy.meshgrid(xcoords, ycoords, indexing="ij")
         Z = losses
         fig = pyplot.figure()
-        CS = pyplot.contour(X, Y, Z, cmap='summer', levels=numpy.arange(0.1, 10, 0.5))
+        CS = pyplot.contour(X, Y, Z, cmap='summer', levels=numpy.arange(losses.min(), losses.max(), loss_level_diff)) ## THIS WILL BE CHANGED
         pyplot.clabel(CS, inline=1, fontsize=8)
 
         data = numpy.load(f"{args.trajectory_file}")

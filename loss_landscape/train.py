@@ -13,6 +13,7 @@ import logging
 import os
 import pprint
 import time
+import json
 
 import dill
 import numpy.random
@@ -27,15 +28,13 @@ from utils.linear_algebra import FrequentDirectionAccountant
 from utils.nn_manipulation import count_params, flatten_grads
 from utils.reproducibility import set_seed
 from utils.resnet import get_resnet
+import matplotlib.pyplot as plt
 
 from adversarial_attack import pgd_attack_l2, pgd_attack
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 
-# "Fixed" hyperparameters
-NUM_EPOCHS = 400
-
-# In the resnet paper they train for ~90 epoch before reducing LR, then 45 and 45 epochs.
-# We use 100-50-50 schedule here.
-LR = 0.1
+# data folder
 DATA_FOLDER = "../data/"
 
 
@@ -95,19 +94,19 @@ if __name__ == "__main__":
     parser.add_argument("-D", "--debug", action='store_true')
     parser.add_argument("--seed", required=False, type=int, default=0)
     parser.add_argument(
-        "--device", required=False, default="cuda" if torch.cuda.is_available() else "cpu"
+        "--device", required=False, default="cuda:0" if torch.cuda.is_available() else "cpu"
     )
-    parser.add_argument("--result_folder", "-r", required=False, default="results/resnet20_adversarial_skip_bn_bias_remove_skip_connections")
+    parser.add_argument("--result_folder", "-r", required=False, default="C:/Users/berkt/Desktop/cs699_dynamics_of_representation_learning/loss_landscape/results_final/resnet20_adversarial_skip_bn_bias_pgd_l2")
 
     # model related arguments
     parser.add_argument("--statefile", "-s", required=False, default=None)
     parser.add_argument(
         "--model", required=False, choices=["resnet20", "resnet32", "resnet44", "resnet56"], default="resnet20"
     )
-    parser.add_argument("--remove_skip_connections", action="store_true", default=True)
-    parser.add_argument("--use_adversarial_training", action="store_true", default=False)
+    parser.add_argument("--remove_skip_connections", action="store_true", default=False)
+    parser.add_argument("--use_adversarial_training", action="store_true", default=True)
     parser.add_argument(
-        "--skip_bn_bias", action="store_true",
+        "--skip_bn_bias", action="store_true", default=True,
         help="whether to skip considering bias and batch norm params or not, Li et al do not consider bias and batch norm params"
     )
 
@@ -117,9 +116,16 @@ if __name__ == "__main__":
         default=["epoch", "init"]
     )
 
-    parser.add_argument("--test_model", action="store_true", default=True)
-    parser.add_argument("--ckpt_load", required=False, type=int, default=200)
+    parser.add_argument("--test_model", action="store_true", default=False)
+    parser.add_argument("--ckpt_load", required=False, type=int, default=-1)
     parser.add_argument("--attack_type", required=False, type=str, default="pgd_l2")
+    
+    parser.add_argument("--attack_eps", required=False, type=float, default=2) # 2 for pgd_l2, 0.05 for pgd
+    parser.add_argument("--attack_alpha", required=False, type=float, default=0.2) # 0.2 for pgd_l2, 0.05 for pgd
+    parser.add_argument("--attack_iters", required=False, type=int, default=20)
+
+    parser.add_argument("--num_epochs", required=False, type=int, default=200)
+    parser.add_argument("--lr", required=False, type=float, default=0.1)
 
 
     args = parser.parse_args()
@@ -139,6 +145,11 @@ if __name__ == "__main__":
     logger.info("Config:")
     logger.info(pprint.pformat(vars(args), indent=4))
 
+    # save config file as config.json
+    with open(f"{args.result_folder}/config.json", 'wt') as f:
+        json.dump(vars(args), f, indent=4)
+    
+    # sets the seed
     set_seed(args.seed)
 
     # get dataset
@@ -167,7 +178,7 @@ if __name__ == "__main__":
     fd_last_1 = FrequentDirectionAccountant(k=2, l=10, n=total_params, device=args.device)
 
     # use the same setup as He et al., 2015 (resnet)
-    optimizer = torch.optim.SGD(model.parameters(), lr=LR, momentum=0.9, weight_decay=1e-4)
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer=optimizer, lr_lambda=lambda x: 1 if x < 100 else (0.1 if x < 150 else 0.01)
     )
@@ -180,10 +191,11 @@ if __name__ == "__main__":
     if not args.test_model:
         # training loop
         # we pass flattened gradients to the FrequentDirectionAccountant before clearing the grad buffer
-        total_step = len(train_loader) * NUM_EPOCHS
+        total_step = len(train_loader) * args.num_epochs
         step = 0
         direction_time = 0
-        for epoch in range(NUM_EPOCHS):
+        
+        for epoch in range(args.num_epochs):
             model.train()
             for i, (images, labels) in enumerate(train_loader):
                 images = images.to(args.device)
@@ -192,9 +204,9 @@ if __name__ == "__main__":
                 # Adversarial attack to images
                 if args.use_adversarial_training:
                     if args.attack_type == 'pgd_l2':
-                        images = pgd_attack_l2(model, images, labels)
+                        images = pgd_attack_l2(model, images, labels, eps=args.attack_eps, alpha=args.attack_alpha, iters=args.attack_iters, device=args.device)
                     elif args.attack_type == 'pgd':
-                        images = pgd_attack(model, images, labels)
+                        images = pgd_attack(model, images, labels, eps=args.attack_eps, alpha=args.attack_alpha, iters=args.attack_iters, device=args.device)
                     else:
                         assert 1==0, 'Only available attack types are PGD and PGD-L2!'
                     
@@ -212,11 +224,11 @@ if __name__ == "__main__":
                 fd.update(flatten_grads(model, total_params, skip_bn_bias=args.skip_bn_bias))
                 direction_time += time.time() - start
 
-                if epoch >= NUM_EPOCHS - 10:
+                if epoch >= args.num_epochs - 10:
                     fd_last_10.update(
                         flatten_grads(model, total_params, skip_bn_bias=args.skip_bn_bias)
                     )
-                if epoch >= NUM_EPOCHS - 1:
+                if epoch >= args.num_epochs - 1:
                     fd_last_1.update(
                         flatten_grads(model, total_params, skip_bn_bias=args.skip_bn_bias)
                     )
@@ -226,7 +238,7 @@ if __name__ == "__main__":
 
                 if step % 100 == 0:
                     logger.info(
-                        f"Epoch [{epoch}/{NUM_EPOCHS}], Step [{step}/{total_step}] Loss: {loss.item():.4f}"
+                        f"Epoch [{epoch}/{args.num_epochs}], Step [{step}/{total_step}] Loss: {loss.item():.4f}"
                     )
 
             scheduler.step()
@@ -296,13 +308,17 @@ if __name__ == "__main__":
         
         labels_all = []
         for images, labels in test_loader:
-            pred_labels_batch = model(images).argmax(axis=1).detach()
+            images = images.to("cuda:0")
+            pred_labels_batch = model(images).argmax(axis=1).detach().to('cpu')
             
             images_pgd = pgd_attack(model, images, labels, iters=20)
-            images_pgd_l2 = pgd_attack_l2(model, images, labels, iters=20, eps=0.7)
+            images_pgd_l2 = pgd_attack_l2(model, images, labels, iters=40, eps=2, alpha=0.1)
             
-            pred_labels_pgd_batch = model(images_pgd).argmax(axis=1).detach()
-            pred_labels_pgd_l2_batch = model(images_pgd_l2).argmax(axis=1).detach()
+            images_pgd = images_pgd.to("cuda:0")
+            images_pgd_l2 = images_pgd_l2.to("cuda:0")
+            
+            pred_labels_pgd_batch = model(images_pgd).argmax(axis=1).detach().to('cpu')
+            pred_labels_pgd_l2_batch = model(images_pgd_l2).argmax(axis=1).detach().to('cpu')
 
             pred_labels.append(pred_labels_batch)
             pred_labels_pgd.append(pred_labels_pgd_batch)
@@ -313,7 +329,6 @@ if __name__ == "__main__":
         pred_labels_pgd =  torch.cat(pred_labels_pgd)
         pred_labels_pgd_l2 =  torch.cat(pred_labels_pgd_l2)
         labels_all =  torch.cat(labels_all)
-
         print(f"Test Accuracy on vanilla images: {(labels_all == pred_labels).float().mean().cpu().data.numpy()}, \
                 on pgd images: {(labels_all == pred_labels_pgd).float().mean().cpu().data.numpy()} \
                 on pgd l2 images: {(labels_all == pred_labels_pgd_l2).float().mean().cpu().data.numpy()} ")
