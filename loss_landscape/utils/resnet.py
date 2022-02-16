@@ -9,7 +9,7 @@ ResNet implementation for CIFAR datasets
 
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
+
 
 class DownSample2D(nn.Module):
     def __init__(self, stride_h, stride_w):
@@ -145,13 +145,15 @@ def get_resnet(model_string):
     if model_string == "resnet20":
         return resnet20
 
+
 def set_resnet_weights(model, stat_dict):
     try:
         model.load_state_dict(stat_dict)
     except:
-        model = torch.nn.DataParallel(model)
+        model = nn.DataParallel(model)
         model.load_state_dict(stat_dict)
     return model
+
 
 if __name__ == "__main__":
     import torch
