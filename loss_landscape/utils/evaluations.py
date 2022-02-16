@@ -1,10 +1,14 @@
 import logging
-
+import os, sys
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),  'loss_landscape'))
+from adversarial_attack import *
 import dill
 import numpy
 import torch
 from sklearn.decomposition import PCA
 from torch import nn
+
+from test_model import load_adversarial_images
 
 from utils.nn_manipulation import count_params, flatten_params
 
@@ -21,23 +25,52 @@ def get_loss_value(model, loader, device):
     model.eval()
     losses = []
     accuracies = []
-    with torch.no_grad():
-        for i, (images, labels) in enumerate(loader):
-            images = images.to(device)
-            labels = labels.to(device)
+        
+    for i, (images, labels) in enumerate(loader):
+        images = images.to(device)
+        labels = labels.to(device)
 
-            # Forward pass
-            outputs = model(images)
-            loss = torch.nn.functional.cross_entropy(outputs, labels, reduce=None).detach()
-            losses.append(loss.reshape(-1))
+        # Forward pass, vanilla
+        outputs = model(images)
+        loss = torch.nn.functional.cross_entropy(outputs, labels, reduce=None).detach()
+        losses.append(loss.reshape(-1))
 
-            acc = (torch.argmax(outputs, dim=1) == labels).float().detach()
-            accuracies.append(acc.reshape(-1))
+        acc = (torch.argmax(outputs, dim=1) == labels).float().detach()
+        accuracies.append(acc.reshape(-1))
 
-        losses = torch.cat(losses, dim=0).mean().cpu().data.numpy()
-        accuracies = torch.cat(accuracies, dim=0).mean().cpu().data.numpy()
-        return losses, accuracies
+    losses = torch.cat(losses, dim=0).mean().cpu().data.numpy()
+    accuracies = torch.cat(accuracies, dim=0).mean().cpu().data.numpy()        
+    
+    return losses, accuracies
 
+def get_loss_value_for_adversarial_images(model, path, device):
+    """
+    Evaluation loop for the multi-class classification problem.
+
+    return (loss, accuracy)
+    """
+    
+    model.eval()
+    losses = []
+    accuracies = []
+    list_dir = os.listdir(path)
+    for batch_dir in list_dir:
+        images, labels = load_adversarial_images(path + '/' + batch_dir)
+        images = images.to(device)
+        labels = labels.to(device)
+
+        # Forward pass, vanilla
+        outputs = model(images)
+        loss = torch.nn.functional.cross_entropy(outputs, labels, reduce=None).detach()
+        losses.append(loss.reshape(-1))
+
+        acc = (torch.argmax(outputs, dim=1) == labels).float().detach()
+        accuracies.append(acc.reshape(-1))
+
+    losses = torch.cat(losses, dim=0).mean().cpu().data.numpy()
+    accuracies = torch.cat(accuracies, dim=0).mean().cpu().data.numpy()        
+    
+    return losses, accuracies
 
 def get_PCA_directions(model: nn.Module, state_files, skip_bn_bias):
     """
@@ -49,14 +82,16 @@ def get_PCA_directions(model: nn.Module, state_files, skip_bn_bias):
     """
 
     # load final weights and flatten
-    model.load_state_dict(torch.load(state_files[-1], pickle_module=dill, map_location="cpu"))
+    state_dict = torch.load(state_files[-1], pickle_module=dill, map_location="cpu")
+    model = set_resnet_weights(model, state_dict)
     total_param = count_params(model, skip_bn_bias=skip_bn_bias)
     w_final = flatten_params(model, total_param, skip_bn_bias=skip_bn_bias)
 
     # compute w_i- w_final
     w_diff_matrix = numpy.zeros((len(state_files) - 1, total_param))
-    for idx, file in enumerate(state_files[:-1]):
-        model.load_state_dict(torch.load(file, pickle_module=dill, map_location="cpu"))
+    for idx, file in enumerate(state_files[1:-1]):
+        state_dict = torch.load(file, pickle_module=dill, map_location="cpu")
+        model = set_resnet_weights(model, state_dict)
         w = flatten_params(model, total_param, skip_bn_bias=skip_bn_bias)
 
         diff = w - w_final

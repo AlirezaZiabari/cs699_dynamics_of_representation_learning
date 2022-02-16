@@ -27,7 +27,7 @@ from utils.evaluations import get_loss_value
 from utils.linear_algebra import FrequentDirectionAccountant
 from utils.nn_manipulation import count_params, flatten_grads
 from utils.reproducibility import set_seed
-from utils.resnet import get_resnet
+from utils.resnet import get_resnet, set_resnet_weights
 import matplotlib.pyplot as plt
 
 from adversarial_attack import pgd_attack_l2, pgd_attack
@@ -60,6 +60,7 @@ def get_dataloader(batch_size, train_size=None, test_size=None, transform_train_
 
     test_transform = transforms.Compose([transforms.ToTensor(), normalize])
 
+
     # CIFAR-10 dataset
     train_dataset = torchvision.datasets.CIFAR10(
         root=DATA_FOLDER, train=True, transform=transform, download=True
@@ -69,6 +70,7 @@ def get_dataloader(batch_size, train_size=None, test_size=None, transform_train_
         root=DATA_FOLDER, train=False, transform=test_transform, download=True
     )
 
+    
     if train_size:
         indices = numpy.random.permutation(numpy.arange(len(train_dataset)))
         train_dataset = Subset(train_dataset, indices[:train_size])
@@ -79,7 +81,7 @@ def get_dataloader(batch_size, train_size=None, test_size=None, transform_train_
 
     # Data loader
     train_loader = torch.utils.data.DataLoader(
-        dataset=train_dataset, batch_size=batch_size, shuffle=True, num_workers=0
+        dataset=train_dataset, batch_size=batch_size, shuffle=False, num_workers=0
     )
 
     test_loader = torch.utils.data.DataLoader(
@@ -96,7 +98,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--device", required=False, default="cuda:0" if torch.cuda.is_available() else "cpu"
     )
-    parser.add_argument("--result_folder", "-r", required=False, default="C:/Users/berkt/Desktop/cs699_dynamics_of_representation_learning/loss_landscape/results_final/resnet20_adversarial_skip_bn_bias_pgd_l2")
+    parser.add_argument("--result_folder", "-r", required=False, default="C:/Users/berkt/Desktop/cs699_dynamics_of_representation_learning/loss_landscape/results_final/resnet20_skip_bn_bias")
 
     # model related arguments
     parser.add_argument("--statefile", "-s", required=False, default=None)
@@ -105,28 +107,29 @@ if __name__ == "__main__":
     )
     parser.add_argument("--remove_skip_connections", action="store_true", default=False)
     parser.add_argument("--use_adversarial_training", action="store_true", default=True)
+    parser.add_argument("--test_adv", action="store_true", default=False)
     parser.add_argument(
         "--skip_bn_bias", action="store_true", default=True,
         help="whether to skip considering bias and batch norm params or not, Li et al do not consider bias and batch norm params"
     )
 
-    parser.add_argument("--batch_size", required=False, type=int, default=128)
+    parser.add_argument("--batch_size", required=False, type=int, default=1000)
     parser.add_argument(
         "--save_strategy", required=False, nargs="+", choices=["epoch", "init"],
         default=["epoch", "init"]
     )
 
-    parser.add_argument("--test_model", action="store_true", default=False)
-    parser.add_argument("--ckpt_load", required=False, type=int, default=-1)
-    parser.add_argument("--attack_type", required=False, type=str, default="pgd_l2")
+    parser.add_argument("--test_model", action="store_true", default=True)
+    parser.add_argument("--ckpt_load", required=False, type=int, default=200)
+    parser.add_argument("--attack_type", required=False, type=str, default="pgd")
     
-    parser.add_argument("--attack_eps", required=False, type=float, default=2) # 2 for pgd_l2, 0.05 for pgd
-    parser.add_argument("--attack_alpha", required=False, type=float, default=0.2) # 0.2 for pgd_l2, 0.05 for pgd
+    parser.add_argument("--attack_eps", required=False, type=float, default=0.05) # 2 for pgd_l2, 0.05 for pgd
+    parser.add_argument("--attack_alpha", required=False, type=float, default=0.05) # 0.2 for pgd_l2, 0.05 for pgd
     parser.add_argument("--attack_iters", required=False, type=int, default=20)
 
     parser.add_argument("--num_epochs", required=False, type=int, default=200)
     parser.add_argument("--lr", required=False, type=float, default=0.1)
-
+    
 
     args = parser.parse_args()
     print('--------------------------------------')
@@ -153,6 +156,9 @@ if __name__ == "__main__":
     set_seed(args.seed)
 
     # get dataset
+    read_dir = "C:/Users/berkt/Desktop/cs699_dynamics_of_representation_learning/loss_landscape/results_final/resnet20_skip_bn_bias/"
+    print(f'Reading pgd images from: {read_dir}')
+    # train_loader, test_loader = get_dataloader(args.batch_size, use_adversarial=True, dir=read_dir, save_name="pgd_image_")
     train_loader, test_loader = get_dataloader(args.batch_size)
 
     # get model
@@ -189,6 +195,10 @@ if __name__ == "__main__":
         )
 
     if not args.test_model:
+        if args.ckpt_load > 0:        
+            # model= torch.nn.DataParallel(model)
+            model.load_state_dict(torch.load(f"{args.result_folder}/ckpt/{args.ckpt_load}_model.pt", map_location=args.device))
+        
         # training loop
         # we pass flattened gradients to the FrequentDirectionAccountant before clearing the grad buffer
         total_step = len(train_loader) * args.num_epochs
@@ -202,21 +212,28 @@ if __name__ == "__main__":
                 labels = labels.to(args.device)
 
                 # Adversarial attack to images
-                if args.use_adversarial_training:
-                    if args.attack_type == 'pgd_l2':
-                        images = pgd_attack_l2(model, images, labels, eps=args.attack_eps, alpha=args.attack_alpha, iters=args.attack_iters, device=args.device)
-                    elif args.attack_type == 'pgd':
-                        images = pgd_attack(model, images, labels, eps=args.attack_eps, alpha=args.attack_alpha, iters=args.attack_iters, device=args.device)
-                    else:
-                        assert 1==0, 'Only available attack types are PGD and PGD-L2!'
+                if args.attack_type == 'pgd_l2':
+                    images_adv = pgd_attack_l2(model, images, labels, eps=args.attack_eps, alpha=args.attack_alpha, iters=args.attack_iters, device=args.device)
+                elif args.attack_type == 'pgd':
+                    images_adv = pgd_attack(model, images, labels, eps=args.attack_eps, alpha=args.attack_alpha, iters=args.attack_iters, device=args.device)
+                else:
+                    assert 1==0, 'Only available attack types are PGD and PGD-L2!'
                     
-                # Forward pass
+                # Forward pass, vanilla
                 outputs = model(images)
-                loss = torch.nn.functional.cross_entropy(outputs, labels)
-
-                # Backward and optimize
+                train_loss = torch.nn.functional.cross_entropy(outputs, labels)
+                
+                # Forward pass, adversarial
+                outputs_adv = model(images_adv)
+                train_loss_adv = torch.nn.functional.cross_entropy(outputs_adv, labels)
+                    
+                # Backward and optimize, on adversarial
                 optimizer.zero_grad()
-                loss.backward()
+                if args.use_adversarial_training:
+                    train_loss_adv.backward()
+                else:
+                    train_loss.backward()
+                    
                 optimizer.step()
 
                 # get gradient and send it to the accountant
@@ -233,27 +250,41 @@ if __name__ == "__main__":
                         flatten_grads(model, total_params, skip_bn_bias=args.skip_bn_bias)
                     )
 
-                summary_writer.add_scalar("train/loss", loss.item(), step)
+                summary_writer.add_scalar("train/loss_adv", train_loss_adv.item(), step)
+                summary_writer.add_scalar("train/loss", train_loss.item(), step)
                 step += 1
 
                 if step % 100 == 0:
                     logger.info(
-                        f"Epoch [{epoch}/{args.num_epochs}], Step [{step}/{total_step}] Loss: {loss.item():.4f}"
+                        f"Epoch [{epoch}/{args.num_epochs}], Step [{step}/{total_step}] Train Loss: {train_loss.item():.4f}, Train Adversarial Loss: {train_loss_adv.item():.4f}"
                     )
 
             scheduler.step()
-
+            
             # Save the model checkpoint
             if "epoch" in args.save_strategy:
+                save_name = epoch + 1
+                if args.ckpt_load > 0:
+                    save_name += args.ckpt_load 
+                    
                 torch.save(
-                    model.state_dict(), f'{args.result_folder}/ckpt/{epoch + 1}_model.pt',
+                    model.state_dict(), f'{args.result_folder}/ckpt/{save_name}_model.pt',
                     pickle_module=dill
                 )
 
-            loss, acc = get_loss_value(model, test_loader, device=args.device)
-            logger.info(f'Accuracy of the model on the test images: {100 * acc}%')
+            loss, acc = get_loss_value(model, test_loader, device=args.device, attack_type='vanilla')
+            logger.info(f'Accuracy of the model on the vanilla test images: {100 * acc}%')
             summary_writer.add_scalar("test/acc", acc, step)
             summary_writer.add_scalar("test/loss", loss, step)
+            
+            if args.test_adv:
+                loss_adv, acc_adv = get_loss_value(model, test_loader, device=args.device,
+                                                              attack_type=args.attack_type, attack_eps=args.attack_eps, 
+                                                              attack_alpha=args.attack_alpha, attack_iters=args.attack_iters)
+                logger.info(f'Accuracy of the model on the adversarial test images: {100 * acc_adv}%')
+                summary_writer.add_scalar("test/acc_adv", acc_adv, step)
+                summary_writer.add_scalar("test/loss_adv", loss_adv, step)
+            
 
         logger.info(f"Time to computer frequent directions {direction_time} s")
 
@@ -292,46 +323,61 @@ if __name__ == "__main__":
         )
 
     else:
-        
+       
         if not torch.cuda.is_available():
             device = torch.device('cpu')
         else:
             device = torch.device('cuda:0')
-
+        
         # load saved model
-        model.load_state_dict(torch.load(f"{args.result_folder}/ckpt/{args.ckpt_load}_model.pt", map_location=device))
-        model.eval()
+        state_dict = torch.load(f"{args.result_folder}/ckpt/{args.ckpt_load}_model.pt", map_location=device)
+        model = set_resnet_weights(model, state_dict)
 
+        model.eval()
         pred_labels = []
         pred_labels_pgd = []
         pred_labels_pgd_l2 = []
         
         labels_all = []
+        invTrans = transforms.Compose([ transforms.Normalize(mean = [ 0., 0., 0. ],
+                                                     std = [ 1/0.229, 1/0.224, 1/0.225 ]),
+                                transforms.Normalize(mean = [ -0.485, -0.456, -0.406 ],
+                                                     std = [ 1., 1., 1. ]),
+                               ])
+
         for images, labels in test_loader:
+            
             images = images.to("cuda:0")
+            
             pred_labels_batch = model(images).argmax(axis=1).detach().to('cpu')
             
-            images_pgd = pgd_attack(model, images, labels, iters=20)
-            images_pgd_l2 = pgd_attack_l2(model, images, labels, iters=40, eps=2, alpha=0.1)
+            images_pgd = pgd_attack(model, images, labels, eps=0.05, alpha=0.05, iters=20)
             
-            images_pgd = images_pgd.to("cuda:0")
-            images_pgd_l2 = images_pgd_l2.to("cuda:0")
+            images_inv = invTrans(images)
+            images_pgd_inv = invTrans(images_pgd)
             
-            pred_labels_pgd_batch = model(images_pgd).argmax(axis=1).detach().to('cpu')
-            pred_labels_pgd_l2_batch = model(images_pgd_l2).argmax(axis=1).detach().to('cpu')
+             
+            # images_pgd_l2 = pgd_attack_l2(model, images, labels, iters=20, eps=2, alpha=0.1)
+            
+            # pred_labels_pgd_batch = model(images_pgd).argmax(axis=1).detach().to('cpu')
+            # pred_labels_pgd_l2_batch = model(images_pgd_l2).argmax(axis=1).detach().to('cpu')
 
             pred_labels.append(pred_labels_batch)
-            pred_labels_pgd.append(pred_labels_pgd_batch)
-            pred_labels_pgd_l2.append(pred_labels_pgd_l2_batch)
-            labels_all.append(labels.detach())
+            # pred_labels_pgd.append(pred_labels_pgd_batch)
+            # pred_labels_pgd_l2.append(pred_labels_pgd_l2_batch)
+            labels_all.append(labels)
 
         pred_labels = torch.cat(pred_labels)
-        pred_labels_pgd =  torch.cat(pred_labels_pgd)
-        pred_labels_pgd_l2 =  torch.cat(pred_labels_pgd_l2)
+        # pred_labels_pgd =  torch.cat(pred_labels_pgd)
+        # pred_labels_pgd_l2 =  torch.cat(pred_labels_pgd_l2)
         labels_all =  torch.cat(labels_all)
-        print(f"Test Accuracy on vanilla images: {(labels_all == pred_labels).float().mean().cpu().data.numpy()}, \
-                on pgd images: {(labels_all == pred_labels_pgd).float().mean().cpu().data.numpy()} \
-                on pgd l2 images: {(labels_all == pred_labels_pgd_l2).float().mean().cpu().data.numpy()} ")
         
-
-
+        acc = (labels_all == pred_labels).float().mean().cpu().data.numpy()
+        # acc_pgd = (labels_all == pred_labels_pgd).float().mean().cpu().data.numpy()
+        # acc_pgd_l2 = (labels_all == pred_labels_pgd_l2).float().mean().cpu().data.numpy()
+        
+        # print(f"Test Accuracy on \n\
+        #         vanilla images: {acc}, \n\
+        #         on pgd images: {acc_pgd} \n")
+        print(f"Test Accuracy on \n\
+                vanilla images: {acc}")

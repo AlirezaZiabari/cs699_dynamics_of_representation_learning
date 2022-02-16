@@ -111,8 +111,6 @@ python plot.py --result_folder figures/resnet56/ \
 
 Note: The code should be executable with loss-landscape as the root folder. 
 
-
-
 ##### ADDED LATER
 
 ## Train Model
@@ -125,7 +123,37 @@ python train.py --result_folder results_final/resnet20_adversarial_skip_bn_bias_
 python compute_trajectory.py -r results_final/resnet20_skip_bn_bias/trajectories --direction_file results_final/resnet20_skip_bn_bias/buffer.npy.npz --projection_file buffer_proj.npz --model resnet20  -s results_final/resnet20_skip_bn_bias/ckpt --skip_bn_bias
 
 ## Compute Loss surface
-python compute_loss_surface.py --result_folder results_final/resnet20_skip_bn_bias/loss_surface/  -s results_final/resnet20_skip_bn_bias/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results_final/resnet20_skip_bn_bias/buffer.npy.npz --surface_file buffer_loss_surface.npz --device cuda:0  --xcoords 6:-0.5:0.5 --ycoords 6:-0.5:0.5
+python compute_loss_surface.py --result_folder results_final/resnet20_skip_bn_bias/loss_surface/  -s results_final/resnet20_skip_bn_bias/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results_final/resnet20_skip_bn_bias/buffer.npy.npz --device cuda:0  --xcoords 21:-2:2 --ycoords 21:-2:2 --attack_type loaded_pgd --attack_eps 0.05 --attack_alpha 0.05 --attack_iters 20 --test_data
 
-## Plot 
-python plot.py --result_folder results_final/resnet20_skip_bn_bias/figures/ --trajectory_file results_final/resnet20_skip_bn_bias/trajectories/buffer_proj.npz --surface_file results_final/resnet20_skip_bn_bias/loss_surface/buffer_loss_surface.npz --plot_prefix resnet20_freq_dir_vanilla
+## Plot --trajectory_file results_final/resnet20_adversarial_skip_bn_bias_pgd/trajectories/buffer_proj.npz
+python plot.py --result_folder results_final/resnet20_skip_bn_bias/figures/  --surface_file results_final/resnet20_skip_bn_bias/loss_surface/buffer_loss_surface_test_loaded_pgd_eps5e-02_alpha5e-02_iters2e+01_21,-2,2.npz --plot_prefix resnet20_freq_dir_test_loaded_pgd_eps5e-02_alpha5e-02_iters2e+01_21,-2,2
+
+# vanilla
+python compute_trajectory.py -r results_final/resnet20_skip_bn_bias/trajectories --direction_file results_final/resnet20_skip_bn_bias/pca_directions.npz --projection_file pca_proj.npz --model resnet20  -s results_final/resnet20_skip_bn_bias/ckpt --skip_bn_bias
+
+python compute_loss_surface.py --model_folder results_final/resnet20_skip_bn_bias  --adversarial_folder results_final/resnet20_skip_bn_bias -s results_final/resnet20_skip_bn_bias/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results_final/resnet20_skip_bn_bias/pca_directions.npz --device cuda:0  --xcoords 50:-30:45 --ycoords 50:-30:45 --use_attack
+
+python compute_loss_surface.py --model_folder results_final/resnet20_skip_bn_bias  --adversarial_folder results_final/resnet20_adversarial_skip_bn_bias_pgd -s results_final/resnet20_skip_bn_bias/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results_final/resnet20_skip_bn_bias/pca_directions.npz --device cuda:0  --xcoords 50:-30:45 --ycoords 50:-30:45 --use_attack
+
+python plot.py --result_folder results_final/resnet20_skip_bn_bias/figures_final/  --surface_file results_final/resnet20_skip_bn_bias/loss_surface/pca_loss_surface_train_adversarial_50,-30,45_cross.npz --plot_prefix resnet20_pca_dir_train_adversarial_50,-30,45_trajectory_cross --trajectory_file results_final/resnet20_skip_bn_bias/trajectories/pca_proj.npz
+
+python plot_3d.py --result_folder results_final/resnet20_skip_bn_bias/figures_final_linear_color_3d/  --surface_file results_final/resnet20_skip_bn_bias/loss_surface/pca_loss_surface_train_vanilla_50,-30,45.npz --plot_prefix resnet20_3d_pca_dir_train_vanilla_50,-30,45_trajectory --trajectory_file results_final/resnet20_skip_bn_bias/trajectories/pca_proj.npz --x_uplim 45 --x_lowlim -30 --y_uplim 45 --y_lowlim -30 --zlim 15
+
+
+# adversarial
+python compute_trajectory.py -r results_final/resnet20_adversarial_skip_bn_bias_pgd/trajectories --direction_file results_final/resnet20_adversarial_skip_bn_bias_pgd/pca_directions.npz --projection_file pca_proj.npz --model resnet20  -s results_final/resnet20_adversarial_skip_bn_bias_pgd/ckpt --skip_bn_bias
+
+python compute_loss_surface.py --model_folder results_final/resnet20_adversarial_skip_bn_bias_pgd  --adversarial_folder results_final/resnet20_adversarial_skip_bn_bias_pgd -s results_final/resnet20_adversarial_skip_bn_bias_pgd/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results_final/resnet20_adversarial_skip_bn_bias_pgd/pca_directions.npz --device cuda:0  --xcoords 50:-30:45 --ycoords 50:-30:45 --use_attack
+
+python compute_loss_surface.py --model_folder results_final/resnet20_adversarial_skip_bn_bias_pgd  --adversarial_folder results_final/resnet20_skip_bn_bias -s results_final/resnet20_adversarial_skip_bn_bias_pgd/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results_final/resnet20_adversarial_skip_bn_bias_pgd/pca_directions.npz --device cuda:0  --xcoords 50:-30:45 --ycoords 50:-30:45 --use_attack
+
+python compute_loss_surface.py --model_folder results_final/resnet20_adversarial_skip_bn_bias_pgd  --adversarial_folder results_final/resnet20_adversarial_skip_bn_bias_pgd -s results_final/resnet20_adversarial_skip_bn_bias_pgd/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results_final/resnet20_adversarial_skip_bn_bias_pgd/pca_directions.npz --device cuda:0  --xcoords 50:-30:45 --ycoords 50:-30:45 
+
+python plot.py --result_folder results_final/resnet20_adversarial_skip_bn_bias_pgd/figures_final/  --surface_file results_final/resnet20_adversarial_skip_bn_bias_pgd/loss_surface/pca_loss_surface_train_adversarial_50,-30,45_cross.npz --plot_prefix resnet20_pca_dir_train_adversarial_50,-30,45_trajectory_cross --trajectory_file results_final/resnet20_adversarial_skip_bn_bias_pgd/trajectories/pca_proj.npz
+
+python plot_3d.py --result_folder results_final/resnet20_adversarial_skip_bn_bias_pgd/figures_final_linear_color_3d/  --surface_file results_final/resnet20_adversarial_skip_bn_bias_pgd/loss_surface/pca_loss_surface_train_vanilla_50,-30,45.npz --plot_prefix resnet20_3d_pca_dir_train_vanilla_50,-30,45_trajectory --trajectory_file results_final/resnet20_adversarial_skip_bn_bias_pgd/trajectories/pca_proj.npz --x_uplim 45 --x_lowlim -30 --y_uplim 45 --y_lowlim -30 --zlim 15
+
+
+## 30 to -15
+
+

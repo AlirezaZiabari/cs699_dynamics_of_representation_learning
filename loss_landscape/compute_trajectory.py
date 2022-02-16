@@ -13,7 +13,7 @@ import torch
 
 from utils.nn_manipulation import count_params, flatten_params
 from utils.reproducibility import set_seed
-from utils.resnet import get_resnet
+from utils.resnet import get_resnet, set_resnet_weights
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -28,6 +28,9 @@ if __name__ == '__main__':
     )
     parser.add_argument("--remove_skip_connections", action="store_true", default=False)
     parser.add_argument("--skip_bn_bias", action="store_true")
+    
+    parser.add_argument("--test_data", action="store_true", default=False)
+    parser.add_argument("--use_attack", action="store_true", default=False)
 
     parser.add_argument("--direction_file", required=True)
     parser.add_argument("--projection_file", required=True)
@@ -46,7 +49,7 @@ if __name__ == '__main__':
         sys.exit()
 
     set_seed(args.seed)
-
+        
     # get model
     model = get_resnet(args.model)(
         num_classes=10, remove_skip_connections=args.remove_skip_connections
@@ -66,13 +69,19 @@ if __name__ == '__main__':
     direction1 = torch.tensor(temp["direction1"], device="cpu").float()
     direction2 = torch.tensor(temp["direction2"], device="cpu").float()
 
-    model.load_state_dict(torch.load(state_files[-1], pickle_module=dill, map_location="cpu"))
+    state_dict = torch.load(state_files[-1], pickle_module=dill, map_location="cpu")
+    model = set_resnet_weights(model, state_dict)
+
     total_param = count_params(model, skip_bn_bias=args.skip_bn_bias)
     w_final = flatten_params(model, total_param, skip_bn_bias=args.skip_bn_bias)
 
     w_diff_matrix = torch.zeros(len(state_files) - 1, total_param)
-    for idx, file in enumerate(state_files[:-1]):
-        model.load_state_dict(torch.load(file, pickle_module=dill, map_location="cpu"))
+    for idx, file in enumerate(state_files[1:-1]):
+        state_dict = torch.load(file, pickle_module=dill, map_location="cpu")
+        model = set_resnet_weights(model, state_dict)
+        model.eval()
+        
+        
         w = flatten_params(model, total_param, skip_bn_bias=args.skip_bn_bias)
 
         diff = w - w_final
