@@ -254,7 +254,7 @@ if __name__ == "__main__":
         loss, acc = get_loss_value(model, test_loader, args.device,
                                    attack_type=args.attack_type, eps=args.attack_eps,
                                    alpha=args.attack_alpha, iterations=args.attack_iters)
-        logger.info(f'Accuracy of the model on the vanilla test images: {100 * acc}%')
+        logger.info(f'Accuracy of the model on the test images: {100 * acc}%')
         summary_writer.add_scalar("test/acc", acc, step)
         summary_writer.add_scalar("test/loss", loss, step)
 
