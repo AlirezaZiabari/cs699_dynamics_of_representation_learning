@@ -27,11 +27,11 @@ from utils.evaluations import get_loss_value
 from utils.linear_algebra import FrequentDirectionAccountant
 from utils.nn_manipulation import count_params, flatten_grads
 from utils.reproducibility import set_seed
-from utils.resnet import get_resnet, set_resnet_weights
-import matplotlib.pyplot as plt
+from utils.resnet import get_resnet
 
-from adversarial_attack import pgd_attack_l2, pgd_attack
+from adversarial_attack import attack_model
 import ssl
+
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # data folder
@@ -60,7 +60,6 @@ def get_dataloader(batch_size, train_size=None, test_size=None, transform_train_
 
     test_transform = transforms.Compose([transforms.ToTensor(), normalize])
 
-
     # CIFAR-10 dataset
     train_dataset = torchvision.datasets.CIFAR10(
         root=DATA_FOLDER, train=True, transform=transform, download=True
@@ -70,7 +69,6 @@ def get_dataloader(batch_size, train_size=None, test_size=None, transform_train_
         root=DATA_FOLDER, train=False, transform=test_transform, download=True
     )
 
-    
     if train_size:
         indices = numpy.random.permutation(numpy.arange(len(train_dataset)))
         train_dataset = Subset(train_dataset, indices[:train_size])
@@ -98,7 +96,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--device", required=False, default="cuda:0" if torch.cuda.is_available() else "cpu"
     )
-    parser.add_argument("--result_folder", "-r", required=False, default="C:/Users/berkt/Desktop/cs699_dynamics_of_representation_learning/loss_landscape/results_final/resnet20_skip_bn_bias")
+    parser.add_argument("--result_folder", "-r", required=False)
 
     # model related arguments
     parser.add_argument("--statefile", "-s", required=False, default=None)
@@ -106,7 +104,6 @@ if __name__ == "__main__":
         "--model", required=False, choices=["resnet20", "resnet32", "resnet44", "resnet56"], default="resnet20"
     )
     parser.add_argument("--remove_skip_connections", action="store_true", default=False)
-    parser.add_argument("--use_adversarial_training", action="store_true", default=True)
     parser.add_argument("--test_adv", action="store_true", default=False)
     parser.add_argument(
         "--skip_bn_bias", action="store_true", default=True,
@@ -119,17 +116,15 @@ if __name__ == "__main__":
         default=["epoch", "init"]
     )
 
-    parser.add_argument("--test_model", action="store_true", default=True)
     parser.add_argument("--ckpt_load", required=False, type=int, default=200)
-    parser.add_argument("--attack_type", required=False, type=str, default="pgd")
-    
-    parser.add_argument("--attack_eps", required=False, type=float, default=0.05) # 2 for pgd_l2, 0.05 for pgd
-    parser.add_argument("--attack_alpha", required=False, type=float, default=0.05) # 0.2 for pgd_l2, 0.05 for pgd
+
+    parser.add_argument("--attack_type", required=False, type=str, default=None)
+    parser.add_argument("--attack_eps", required=False, type=float, default=0.05)  # 2 for pgd_l2, 0.05 for pgd
+    parser.add_argument("--attack_alpha", required=False, type=float, default=0.05)  # 0.2 for pgd_l2, 0.05 for pgd
     parser.add_argument("--attack_iters", required=False, type=int, default=20)
 
     parser.add_argument("--num_epochs", required=False, type=int, default=200)
     parser.add_argument("--lr", required=False, type=float, default=0.1)
-    
 
     args = parser.parse_args()
     print('--------------------------------------')
@@ -151,14 +146,11 @@ if __name__ == "__main__":
     # save config file as config.json
     with open(f"{args.result_folder}/config.json", 'wt') as f:
         json.dump(vars(args), f, indent=4)
-    
+
     # sets the seed
     set_seed(args.seed)
 
     # get dataset
-    read_dir = "C:/Users/berkt/Desktop/cs699_dynamics_of_representation_learning/loss_landscape/results_final/resnet20_skip_bn_bias/"
-    print(f'Reading pgd images from: {read_dir}')
-    # train_loader, test_loader = get_dataloader(args.batch_size, use_adversarial=True, dir=read_dir, save_name="pgd_image_")
     train_loader, test_loader = get_dataloader(args.batch_size)
 
     # get model
@@ -167,8 +159,7 @@ if __name__ == "__main__":
     )
 
     if torch.cuda.device_count() > 1:
-        model= torch.nn.DataParallel(model)
-
+        model = torch.nn.DataParallel(model)
 
     model.to(args.device)
     logger.info(f"using {args.model} with {count_params(model)} parameters")
@@ -194,190 +185,111 @@ if __name__ == "__main__":
             model.state_dict(), f"{args.result_folder}/ckpt/init_model.pt", pickle_module=dill
         )
 
-    if not args.test_model:
-        if args.ckpt_load > 0:        
-            # model= torch.nn.DataParallel(model)
-            model.load_state_dict(torch.load(f"{args.result_folder}/ckpt/{args.ckpt_load}_model.pt", map_location=args.device))
-        
-        # training loop
-        # we pass flattened gradients to the FrequentDirectionAccountant before clearing the grad buffer
-        total_step = len(train_loader) * args.num_epochs
-        step = 0
-        direction_time = 0
-        
-        for epoch in range(args.num_epochs):
-            model.train()
-            for i, (images, labels) in enumerate(train_loader):
-                images = images.to(args.device)
-                labels = labels.to(args.device)
+    if args.ckpt_load > 0:
+        # model= torch.nn.DataParallel(model)
+        model.load_state_dict(
+            torch.load(f"{args.result_folder}/ckpt/{args.ckpt_load}_model.pt", map_location=args.device))
 
-                # Adversarial attack to images
-                if args.attack_type == 'pgd_l2':
-                    images_adv = pgd_attack_l2(model, images, labels, eps=args.attack_eps, alpha=args.attack_alpha, iters=args.attack_iters, device=args.device)
-                elif args.attack_type == 'pgd':
-                    images_adv = pgd_attack(model, images, labels, eps=args.attack_eps, alpha=args.attack_alpha, iters=args.attack_iters, device=args.device)
-                else:
-                    assert 1==0, 'Only available attack types are PGD and PGD-L2!'
-                    
-                # Forward pass, vanilla
-                outputs = model(images)
-                train_loss = torch.nn.functional.cross_entropy(outputs, labels)
-                
-                # Forward pass, adversarial
-                outputs_adv = model(images_adv)
-                train_loss_adv = torch.nn.functional.cross_entropy(outputs_adv, labels)
-                    
-                # Backward and optimize, on adversarial
-                optimizer.zero_grad()
-                if args.use_adversarial_training:
-                    train_loss_adv.backward()
-                else:
-                    train_loss.backward()
-                    
-                optimizer.step()
+    # training loop
+    # we pass flattened gradients to the FrequentDirectionAccountant before clearing the grad buffer
+    total_step = len(train_loader) * args.num_epochs
+    step = 0
+    direction_time = 0
 
-                # get gradient and send it to the accountant
-                start = time.time()
-                fd.update(flatten_grads(model, total_params, skip_bn_bias=args.skip_bn_bias))
-                direction_time += time.time() - start
+    for epoch in range(args.num_epochs):
+        model.train()
+        for i, (images, labels) in enumerate(train_loader):
+            images = images.to(args.device)
+            labels = labels.to(args.device)
 
-                if epoch >= args.num_epochs - 10:
-                    fd_last_10.update(
-                        flatten_grads(model, total_params, skip_bn_bias=args.skip_bn_bias)
-                    )
-                if epoch >= args.num_epochs - 1:
-                    fd_last_1.update(
-                        flatten_grads(model, total_params, skip_bn_bias=args.skip_bn_bias)
-                    )
+            # attack model
+            if args.attack_type is not None:
+                images = attack_model(args.attack_type, model, images, labels, args.device,
+                                      args.attack_eps, args.attack_alpha, args.attack_iters)
 
-                summary_writer.add_scalar("train/loss_adv", train_loss_adv.item(), step)
-                summary_writer.add_scalar("train/loss", train_loss.item(), step)
-                step += 1
+            # Forward pass
+            outputs = model(images)
+            loss = torch.nn.functional.cross_entropy(outputs, labels)
 
-                if step % 100 == 0:
-                    logger.info(
-                        f"Epoch [{epoch}/{args.num_epochs}], Step [{step}/{total_step}] Train Loss: {train_loss.item():.4f}, Train Adversarial Loss: {train_loss_adv.item():.4f}"
-                    )
+            # Backward and optimize
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-            scheduler.step()
-            
-            # Save the model checkpoint
-            if "epoch" in args.save_strategy:
-                save_name = epoch + 1
-                if args.ckpt_load > 0:
-                    save_name += args.ckpt_load 
-                    
-                torch.save(
-                    model.state_dict(), f'{args.result_folder}/ckpt/{save_name}_model.pt',
-                    pickle_module=dill
+            # get gradient and send it to the accountant
+            start = time.time()
+            fd.update(flatten_grads(model, total_params, skip_bn_bias=args.skip_bn_bias))
+            direction_time += time.time() - start
+
+            if epoch >= args.num_epochs - 10:
+                fd_last_10.update(
+                    flatten_grads(model, total_params, skip_bn_bias=args.skip_bn_bias)
+                )
+            if epoch >= args.num_epochs - 1:
+                fd_last_1.update(
+                    flatten_grads(model, total_params, skip_bn_bias=args.skip_bn_bias)
                 )
 
-            loss, acc = get_loss_value(model, test_loader, device=args.device, attack_type='vanilla')
-            logger.info(f'Accuracy of the model on the vanilla test images: {100 * acc}%')
-            summary_writer.add_scalar("test/acc", acc, step)
-            summary_writer.add_scalar("test/loss", loss, step)
-            
-            if args.test_adv:
-                loss_adv, acc_adv = get_loss_value(model, test_loader, device=args.device,
-                                                              attack_type=args.attack_type, attack_eps=args.attack_eps, 
-                                                              attack_alpha=args.attack_alpha, attack_iters=args.attack_iters)
-                logger.info(f'Accuracy of the model on the adversarial test images: {100 * acc_adv}%')
-                summary_writer.add_scalar("test/acc_adv", acc_adv, step)
-                summary_writer.add_scalar("test/loss_adv", loss_adv, step)
-            
+            summary_writer.add_scalar("train/loss", loss.item(), step)
+            step += 1
 
-        logger.info(f"Time to computer frequent directions {direction_time} s")
+            if step % 100 == 0:
+                logger.info(
+                    f"Epoch [{epoch}/{args.num_epochs}], Step [{step}/{total_step}] Train Loss: {loss.item():.4f}"
+                )
 
-        logger.info(f"fd was updated for {fd.step} steps")
-        logger.info(f"fd_last_10 was updated for {fd_last_10.step} steps")
-        logger.info(f"fd_last_1 was updated for {fd_last_1.step} steps")
+        scheduler.step()
 
-        # save the frequent_direction buffers and principal directions
-        buffer = fd.get_current_buffer()
-        directions = fd.get_current_directions()
-        directions = directions.cpu().data.numpy()
+        # Save the model checkpoint
+        if "epoch" in args.save_strategy:
+            save_name = epoch + 1
+            if args.ckpt_load > 0:
+                save_name += args.ckpt_load
 
-        numpy.savez(
-            f"{args.result_folder}/buffer.npy",
-            buffer=buffer.cpu().data.numpy(), direction1=directions[0], direction2=directions[1]
-        )
+            torch.save(
+                model.state_dict(), f'{args.result_folder}/ckpt/{save_name}_model.pt',
+                pickle_module=dill
+            )
 
-        # save the frequent_direction buffer
-        buffer = fd_last_10.get_current_buffer()
-        directions = fd_last_10.get_current_directions()
-        directions = directions.cpu().data.numpy()
+        loss, acc = get_loss_value(model, test_loader, args.device,
+                                   attack_type=args.attack_type, eps=args.attack_eps,
+                                   alpha=args.attack_alpha, iterations=args.attack_iters)
+        logger.info(f'Accuracy of the model on the vanilla test images: {100 * acc}%')
+        summary_writer.add_scalar("test/acc", acc, step)
+        summary_writer.add_scalar("test/loss", loss, step)
 
-        numpy.savez(
-            f"{args.result_folder}/buffer_last_10.npy",
-            buffer=buffer.cpu().data.numpy(), direction1=directions[0], direction2=directions[1]
-        )
+    logger.info(f"Time to computer frequent directions {direction_time} s")
 
-        # save the frequent_direction buffer
-        buffer = fd_last_1.get_current_buffer()
-        directions = fd_last_1.get_current_directions()
-        directions = directions.cpu().data.numpy()
+    logger.info(f"fd was updated for {fd.step} steps")
+    logger.info(f"fd_last_10 was updated for {fd_last_10.step} steps")
+    logger.info(f"fd_last_1 was updated for {fd_last_1.step} steps")
 
-        numpy.savez(
-            f"{args.result_folder}/buffer_last_1.npy",
-            buffer=buffer.cpu().data.numpy(), direction1=directions[0], direction2=directions[1]
-        )
+    # save the frequent_direction buffers and principal directions
+    buffer = fd.get_current_buffer()
+    directions = fd.get_current_directions()
+    directions = directions.cpu().data.numpy()
 
-    else:
-       
-        if not torch.cuda.is_available():
-            device = torch.device('cpu')
-        else:
-            device = torch.device('cuda:0')
-        
-        # load saved model
-        state_dict = torch.load(f"{args.result_folder}/ckpt/{args.ckpt_load}_model.pt", map_location=device)
-        model = set_resnet_weights(model, state_dict)
+    numpy.savez(
+        f"{args.result_folder}/buffer.npy",
+        buffer=buffer.cpu().data.numpy(), direction1=directions[0], direction2=directions[1]
+    )
 
-        model.eval()
-        pred_labels = []
-        pred_labels_pgd = []
-        pred_labels_pgd_l2 = []
-        
-        labels_all = []
-        invTrans = transforms.Compose([ transforms.Normalize(mean = [ 0., 0., 0. ],
-                                                     std = [ 1/0.229, 1/0.224, 1/0.225 ]),
-                                transforms.Normalize(mean = [ -0.485, -0.456, -0.406 ],
-                                                     std = [ 1., 1., 1. ]),
-                               ])
+    # save the frequent_direction buffer
+    buffer = fd_last_10.get_current_buffer()
+    directions = fd_last_10.get_current_directions()
+    directions = directions.cpu().data.numpy()
 
-        for images, labels in test_loader:
-            
-            images = images.to("cuda:0")
-            
-            pred_labels_batch = model(images).argmax(axis=1).detach().to('cpu')
-            
-            images_pgd = pgd_attack(model, images, labels, eps=0.05, alpha=0.05, iters=20)
-            
-            images_inv = invTrans(images)
-            images_pgd_inv = invTrans(images_pgd)
-            
-             
-            # images_pgd_l2 = pgd_attack_l2(model, images, labels, iters=20, eps=2, alpha=0.1)
-            
-            # pred_labels_pgd_batch = model(images_pgd).argmax(axis=1).detach().to('cpu')
-            # pred_labels_pgd_l2_batch = model(images_pgd_l2).argmax(axis=1).detach().to('cpu')
+    numpy.savez(
+        f"{args.result_folder}/buffer_last_10.npy",
+        buffer=buffer.cpu().data.numpy(), direction1=directions[0], direction2=directions[1]
+    )
 
-            pred_labels.append(pred_labels_batch)
-            # pred_labels_pgd.append(pred_labels_pgd_batch)
-            # pred_labels_pgd_l2.append(pred_labels_pgd_l2_batch)
-            labels_all.append(labels)
+    # save the frequent_direction buffer
+    buffer = fd_last_1.get_current_buffer()
+    directions = fd_last_1.get_current_directions()
+    directions = directions.cpu().data.numpy()
 
-        pred_labels = torch.cat(pred_labels)
-        # pred_labels_pgd =  torch.cat(pred_labels_pgd)
-        # pred_labels_pgd_l2 =  torch.cat(pred_labels_pgd_l2)
-        labels_all =  torch.cat(labels_all)
-        
-        acc = (labels_all == pred_labels).float().mean().cpu().data.numpy()
-        # acc_pgd = (labels_all == pred_labels_pgd).float().mean().cpu().data.numpy()
-        # acc_pgd_l2 = (labels_all == pred_labels_pgd_l2).float().mean().cpu().data.numpy()
-        
-        # print(f"Test Accuracy on \n\
-        #         vanilla images: {acc}, \n\
-        #         on pgd images: {acc_pgd} \n")
-        print(f"Test Accuracy on \n\
-                vanilla images: {acc}")
+    numpy.savez(
+        f"{args.result_folder}/buffer_last_1.npy",
+        buffer=buffer.cpu().data.numpy(), direction1=directions[0], direction2=directions[1]
+    )

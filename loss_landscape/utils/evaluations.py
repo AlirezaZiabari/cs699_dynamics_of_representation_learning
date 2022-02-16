@@ -1,21 +1,24 @@
 import logging
-import os, sys
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),  'loss_landscape'))
-from adversarial_attack import *
+import os
+import sys
 import dill
 import numpy
 import torch
+
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'loss_landscape'))
+
 from sklearn.decomposition import PCA
 from torch import nn
 
-from test_model import load_adversarial_images
-
-from utils.nn_manipulation import count_params, flatten_params
+from nn_manipulation import count_params, flatten_params
+from loss_landscape.adversarial_attack import attack_model
+from loss_landscape.test import load_adversarial_images
+from resnet import set_resnet_weights
 
 logger = logging.getLogger()
 
 
-def get_loss_value(model, loader, device):
+def get_loss_value(model, loader, device, attack_type, eps, alpha, iterations):
     """
     Evaluation loop for the multi-class classification problem.
 
@@ -25,11 +28,14 @@ def get_loss_value(model, loader, device):
     model.eval()
     losses = []
     accuracies = []
-        
+
     for i, (images, labels) in enumerate(loader):
         images = images.to(device)
         labels = labels.to(device)
 
+        if attack_type is not None:
+            images = attack_model(attack_type, model, images, labels, device,
+                                  eps, alpha, iterations)
         # Forward pass, vanilla
         outputs = model(images)
         loss = torch.nn.functional.cross_entropy(outputs, labels, reduce=None).detach()
@@ -39,9 +45,10 @@ def get_loss_value(model, loader, device):
         accuracies.append(acc.reshape(-1))
 
     losses = torch.cat(losses, dim=0).mean().cpu().data.numpy()
-    accuracies = torch.cat(accuracies, dim=0).mean().cpu().data.numpy()        
-    
+    accuracies = torch.cat(accuracies, dim=0).mean().cpu().data.numpy()
+
     return losses, accuracies
+
 
 def get_loss_value_for_adversarial_images(model, path, device):
     """
@@ -49,7 +56,7 @@ def get_loss_value_for_adversarial_images(model, path, device):
 
     return (loss, accuracy)
     """
-    
+
     model.eval()
     losses = []
     accuracies = []
@@ -68,9 +75,10 @@ def get_loss_value_for_adversarial_images(model, path, device):
         accuracies.append(acc.reshape(-1))
 
     losses = torch.cat(losses, dim=0).mean().cpu().data.numpy()
-    accuracies = torch.cat(accuracies, dim=0).mean().cpu().data.numpy()        
-    
+    accuracies = torch.cat(accuracies, dim=0).mean().cpu().data.numpy()
+
     return losses, accuracies
+
 
 def get_PCA_directions(model: nn.Module, state_files, skip_bn_bias):
     """

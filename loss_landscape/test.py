@@ -23,12 +23,14 @@ import matplotlib.pyplot as plt
 
 from adversarial_attack import pgd_attack_l2, pgd_attack
 import ssl
+
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
 def load_adversarial_images(file_dir):
     data = torch.load(file_dir)
     return data["images"], data["labels"]
+
 
 def test_model():
     root_dir = 'C:/Users/berkt/Desktop/cs699_dynamics_of_representation_learning/loss_landscape/results_final/'
@@ -50,14 +52,14 @@ def test_model():
     else:
         number_of_files = 10
         data_type_str = 'test'
-        
+
     if not torch.cuda.is_available():
         device = torch.device('cpu')
     else:
         device = torch.device('cuda:0')
     model = get_resnet(model_name)(
-            num_classes=10, remove_skip_connections=remove_skip_connections
-        )
+        num_classes=10, remove_skip_connections=remove_skip_connections
+    )
 
     # load saved model
     state_dict = torch.load(f"{model_dir}/ckpt/{ckpt_load}_model.pt", map_location=device)
@@ -71,17 +73,17 @@ def test_model():
 
     for i in range(number_of_files):
         images, labels = load_adversarial_images(data_dir + f'adv_{data_type_str}_data_pgd' + f"/pgd_image_{i}.pt")
-        
+
         images = images.to(device)
         labels = labels.to(device)
-        
+
         pred_labels = model(images).argmax(axis=1).detach().to('cpu')
 
         all_pred_labels.append(pred_labels)
         all_labels.append(labels.detach())
 
     all_pred_labels = torch.cat(all_pred_labels)
-    all_labels =  torch.cat(all_labels)
+    all_labels = torch.cat(all_labels)
 
     acc = (all_labels.cpu() == all_pred_labels.cpu()).float().mean().data.numpy()
 
