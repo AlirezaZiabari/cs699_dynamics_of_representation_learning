@@ -12,7 +12,7 @@ from torch import nn
 
 from nn_manipulation import count_params, flatten_params
 from loss_landscape.adversarial_attack import attack_model
-from loss_landscape.test import load_adversarial_images
+from loss_landscape.load_data import load_data_from_path
 from resnet import set_resnet_weights
 
 logger = logging.getLogger()
@@ -50,7 +50,7 @@ def get_loss_value(model, loader, device, attack_type, eps, alpha, iterations):
     return losses, accuracies
 
 
-def get_loss_value_for_adversarial_images(model, path, device):
+def get_loss_value_for_saved_data(model, path, device):
     """
     Evaluation loop for the multi-class classification problem.
 
@@ -62,7 +62,7 @@ def get_loss_value_for_adversarial_images(model, path, device):
     accuracies = []
     list_dir = os.listdir(path)
     for batch_dir in list_dir:
-        images, labels = load_adversarial_images(path + '/' + batch_dir)
+        images, labels = load_data_from_path(path + '/' + batch_dir)
         images = images.to(device)
         labels = labels.to(device)
 

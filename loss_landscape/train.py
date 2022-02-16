@@ -18,11 +18,10 @@ import json
 import dill
 import numpy.random
 import torch
-import torchvision
-import torchvision.transforms as transforms
-from torch.utils.data import Subset
+
 from torch.utils.tensorboard import SummaryWriter
 
+from load_data import get_dataloader
 from utils.evaluations import get_loss_value
 from utils.linear_algebra import FrequentDirectionAccountant
 from utils.nn_manipulation import count_params, flatten_grads
@@ -30,63 +29,6 @@ from utils.reproducibility import set_seed
 from utils.resnet import get_resnet
 
 from adversarial_attack import attack_model
-import ssl
-
-ssl._create_default_https_context = ssl._create_unverified_context
-
-# data folder
-DATA_FOLDER = "../data/"
-
-
-def get_dataloader(batch_size, train_size=None, test_size=None, transform_train_data=True):
-    """
-        returns: cifar dataloader
-
-    Arguments:
-        batch_size:
-        train_size: How many samples to use of train dataset?
-        test_size: How many samples to use from test dataset?
-        transform_train_data: If we should transform (random crop/flip etc) or not
-    """
-
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-
-    transform = transforms.Compose(
-        [
-            transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, 4),
-            transforms.ToTensor(), normalize
-        ]
-    ) if transform_train_data else transforms.Compose([transforms.ToTensor(), normalize])
-
-    test_transform = transforms.Compose([transforms.ToTensor(), normalize])
-
-    # CIFAR-10 dataset
-    train_dataset = torchvision.datasets.CIFAR10(
-        root=DATA_FOLDER, train=True, transform=transform, download=True
-    )
-
-    test_dataset = torchvision.datasets.CIFAR10(
-        root=DATA_FOLDER, train=False, transform=test_transform, download=True
-    )
-
-    if train_size:
-        indices = numpy.random.permutation(numpy.arange(len(train_dataset)))
-        train_dataset = Subset(train_dataset, indices[:train_size])
-
-    if test_size:
-        indices = numpy.random.permutation(numpy.arange(len(test_dataset)))
-        test_dataset = Subset(train_dataset, indices[:test_size])
-
-    # Data loader
-    train_loader = torch.utils.data.DataLoader(
-        dataset=train_dataset, batch_size=batch_size, shuffle=False, num_workers=0
-    )
-
-    test_loader = torch.utils.data.DataLoader(
-        dataset=test_dataset, batch_size=batch_size, shuffle=False, num_workers=0
-    )
-
-    return train_loader, test_loader
 
 
 if __name__ == "__main__":
