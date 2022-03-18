@@ -46,19 +46,18 @@ if __name__ == "__main__":
         "--model", required=False, choices=["resnet20", "resnet32", "resnet44", "resnet56"], default="resnet20"
     )
     parser.add_argument("--remove_skip_connections", action="store_true", default=False)
-    parser.add_argument("--test_adv", action="store_true", default=False)
     parser.add_argument(
         "--skip_bn_bias", action="store_true", default=True,
         help="whether to skip considering bias and batch norm params or not, Li et al do not consider bias and batch norm params"
     )
 
-    parser.add_argument("--batch_size", required=False, type=int, default=1000)
+    parser.add_argument("--batch_size", required=False, type=int, default=128)
     parser.add_argument(
         "--save_strategy", required=False, nargs="+", choices=["epoch", "init"],
         default=["epoch", "init"]
     )
 
-    parser.add_argument("--ckpt_load", required=False, type=int, default=200)
+    parser.add_argument("--ckpt_load", required=False, type=int, default=0)
 
     parser.add_argument("--attack_type", required=False, type=str, default=None)
     parser.add_argument("--attack_eps", required=False, type=float, default=0.05)  # 2 for pgd_l2, 0.05 for pgd

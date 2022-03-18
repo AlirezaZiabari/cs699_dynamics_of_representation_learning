@@ -1,8 +1,8 @@
 import argparse
 import torch
 
-from loss_landscape.train import get_dataloader
-from loss_landscape.utils.evaluations import get_loss_value_for_saved_data, get_loss_value
+from train import get_dataloader
+from utils.evaluations import get_loss_value_for_saved_data, get_loss_value
 
 from utils.resnet import get_resnet, set_resnet_weights
 
@@ -32,7 +32,8 @@ if __name__ == '__main__':
     )
 
     # model related arguments
-    parser.add_argument("--statefile", "-s", required=True, default=None)
+    parser.add_argument("--result_folder", required=True, default=None)
+    parser.add_argument("--ckpt_load", required=False, type=int, default=0)
     parser.add_argument(
         "--model", required=False, choices=["resnet20", "resnet32", "resnet44", "resnet56"], default="resnet20"
     )
@@ -57,8 +58,9 @@ if __name__ == '__main__':
     model = get_resnet(args.model)(
         num_classes=10, remove_skip_connections=args.remove_skip_connections
     )
-    state_dict = torch.load(args.statefile, map_location=args.device)
+    model.to(args.device)
+    state_dict = torch.load(f"{args.result_folder}/ckpt/{args.ckpt_load}_model.pt", map_location=args.device)
     model = set_resnet_weights(model, state_dict)
 
-    test_model(model. args.device, args.use_saved_data, args.data_path, args.batch_size,
+    test_model(model, args.device, args.use_saved_data, args.data_path, args.batch_size,
                args.attack_type, args.attack_eps, args.attack_alpha, args.attack_iters)

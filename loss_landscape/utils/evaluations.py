@@ -10,10 +10,10 @@ sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 from sklearn.decomposition import PCA
 from torch import nn
 
-from nn_manipulation import count_params, flatten_params
-from loss_landscape.adversarial_attack import attack_model
-from loss_landscape.load_data import load_data_from_path
-from resnet import set_resnet_weights
+from utils.nn_manipulation import count_params, flatten_params
+from adversarial_attack import attack_model
+from load_data import load_data_from_path
+from utils.resnet import set_resnet_weights
 
 logger = logging.getLogger()
 
