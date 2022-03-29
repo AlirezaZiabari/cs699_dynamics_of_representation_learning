@@ -1,6 +1,32 @@
 import torch
+from collections import OrderedDict
 
-
+def set_weights_from_swag_base(model, swag_base):
+    
+    state_dict = OrderedDict()
+    
+    # first load non-BN related parameters except BN weight and bias
+    for i, (name, param) in enumerate(model.named_parameters()):
+        split_name = name.split('.')
+        if 'layer' not in name:
+            if split_name[-1] == 'weight':
+                state_dict[name] = swag_base._modules[split_name[0]].weight
+            else:
+                state_dict[name] = swag_base._modules[split_name[0]].bias
+        else:
+            if split_name[-1] == 'weight':
+                state_dict[name] = swag_base._modules[split_name[0]][int(split_name[1])]._modules[split_name[2]].weight
+            else:
+                state_dict[name] = swag_base._modules[split_name[0]][int(split_name[1])]._modules[split_name[2]].bias
+    
+    # Load BN running mean and variance parameters
+    for (name, param) in swag_base.state_dict().items():    
+        if 'running' in name or 'num_batches' in name:
+            state_dict[name] = param
+    
+    model.load_state_dict(state_dict)
+            
+        
 def set_weights_by_direction(model, x, y, direction1, direction2, weights, skip_bn_bias=False):
     if direction2 is not None:
         changes = direction1 * x + direction2 * y

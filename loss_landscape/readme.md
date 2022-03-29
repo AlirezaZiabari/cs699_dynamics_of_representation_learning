@@ -113,23 +113,53 @@ Note: The code should be executable with loss-landscape as the root folder.
 
 ##### ADDED LATER
 
-## Train Model
-python train.py --result_folder "results/resnet56_adversarial_skip_bn_bias_remove_skip_connections/" --device cuda:0 --model resnet56 --skip_bn_bias -D --remove_skip_connections --use_adversarial_training
 
+## Train Model
+python train.py --result_folder "results/resnet20_skip_bn_bias/" --device cuda:0 --model resnet20 --skip_bn_bias -D --batch_size 128  --num_epochs 200
+python train.py --result_folder "results/resnet20_skip_bn_bias_swag/" --device cuda:0 --model resnet20 --skip_bn_bias -D --batch_size 128  --num_epochs 200 --save_swag_model  
+python train.py --result_folder "results/resnet20_skip_bn_bias_swag_diag/" --device cuda:0 --model resnet20 --skip_bn_bias -D --batch_size 128  --num_epochs 200 --save_swag_model --use_swag_diag_cov 
+
+python train.py --result_folder "results/resnet20_adversarial_skip_bn_bias/" --device cuda:0 --model resnet20 --skip_bn_bias -D --batch_size 128 --num_epochs 200 --attack_type pgd
+python train.py --result_folder "results/resnet20_adversarial_skip_bn_bias_swag/" --device cuda:0 --model resnet20 --skip_bn_bias -D --batch_size 128 --num_epochs 200 --attack_type pgd --save_swag_model  
+python train.py --result_folder "results/resnet20_adversarial_skip_bn_bias_swag_diag/" --device cuda:0 --model resnet20 --skip_bn_bias -D --batch_size 128 --num_epochs 200 --attack_type pgd --save_swag_model --use_swag_diag_cov
+ 
 ## Test Model
-python train.py --result_folder results_final/resnet20_adversarial_skip_bn_bias_pgd --device cuda:0 --model resnet20 --skip_bn_bias --test_model
+python test.py --result_folder "results/resnet20_skip_bn_bias" --device cuda:0 --model resnet20 --skip_bn_bias --ckpt_load 200 --train_data
+python test.py --result_folder "results/resnet20_skip_bn_bias_swag" --device cuda:0 --model resnet20 --skip_bn_bias --ckpt_load 200 --train_data --batch_size 1000
+
+python test.py --result_folder "results/resnet20_skip_bn_bias_swag" --device cuda:0 --model resnet20 --skip_bn_bias --ckpt_load 200 --use_swag_model --swag_num_samples 30 --swag_scale 1.0 --batch_size 1000 --train_data --use_adversarial_saved_data --data_root_dir results/resnet20_skip_bn_bias_swag/adversarial_data 
+
+python test.py --result_folder 'results/resnet20_adversarial_skip_bn_bias" --device cuda:0 --model resnet20 --skip_bn_bias --ckpt_load 200 --attack_type pgd 
+python test.py --result_folder results/resnet20_adversarial_skip_bn_bias_swag --device cuda:0 --model resnet20 --skip_bn_bias --ckpt_load 200 --use_swag_model --swag_num_samples 30 --swag_scale 1.0 --data_root_dir results/resnet20_adversarial_skip_bn_bias_swag/adversarial_data --use_adversarial_saved_data --train_data --batch_size 1000
+python test.py --result_folder 'results/resnet20_adversarial_skip_bn_bias_swag_diag" --device cuda:0 --model resnet20 --skip_bn_bias --ckpt_load 200  --use_swag_model --use_swag_diag_cov --swag_num_samples 100 --swag_scale 1.0 
+
+robust-adversarial-swag-train: 0.74
+robust-adversarial-swag-test: 0.69
+
+robust-adversarial-train: 0.77
+robust-adversarial-test: 0.65
+
 
 ## Compute trajectory
-python compute_trajectory.py -r results_final/resnet20_skip_bn_bias/trajectories --direction_file results_final/resnet20_skip_bn_bias/buffer.npy.npz --projection_file buffer_proj.npz --model resnet20  -s results_final/resnet20_skip_bn_bias/ckpt --skip_bn_bias
+python compute_trajectory.py -r results/resnet20_skip_bn_bias_swag_diag/trajectories --direction_file results/resnet20_skip_bn_bias_swag_diag/buffer.npy.npz --projection_file buffer_proj.npz --model resnet20  -s results/resnet20_skip_bn_bias_swag_diag/ckpt --skip_bn_bias
 
 ## Compute Loss surface
-python compute_loss_surface.py --result_folder results_final/resnet20_skip_bn_bias/loss_surface/  -s results_final/resnet20_skip_bn_bias/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results_final/resnet20_skip_bn_bias/buffer.npy.npz --device cuda:0  --xcoords 21:-2:2 --ycoords 21:-2:2 --attack_type loaded_pgd --attack_eps 0.05 --attack_alpha 0.05 --attack_iters 20 --test_data
+python compute_loss_surface.py --result_folder results_final/resnet20_skip_bn_bias/loss_surface/  -s results_final/resnet20_skip_bn_bias/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results_final/resnet20_skip_bn_bias/buffer.npy.npz --device cuda:0  --xcoords 21:-2:2 --ycoords 21:-2:2 --attack_type loaded_pgd --attack_eps 0.05 --attack_alpha 0.05 --attack_iters 20 
+
+python compute_loss_surface.py --model_folder results_final/resnet20_skip_bn_bias_swag_diag/  -s results_final/resnet20_skip_bn_bias_swag_diag/swag_ckpt/200_swag_model_diag.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results_final/resnet20_skip_bn_bias_swag_diag/buffer.npy.npz --device cuda:0  --xcoords 21:-2:2 --ycoords 21:-2:2 --use_swag_model --use_swag_diag_cov --swag_scale 1 --swag_num_samples 30
+
+python compute_loss_surface.py --result_folder results_final/resnet20_skip_bn_bias_swag_diag/loss_surface/  -s results_final/resnet20_skip_bn_bias_swag_diag/swag_ckpt/200_swag_model_diag.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results_final/resnet20_skip_bn_bias_swag_diag/buffer.npy.npz --device cuda:0  --xcoords 21:-2:2 --ycoords 21:-2:2 --attack_type loaded_pgd --attack_eps 0.05 --attack_alpha 0.05 --attack_iters 20 --use_swag_model --use_swag_diag_cov --swag_scale 1 --swag_num_samples 30
+
+
 
 ## Plot --trajectory_file results_final/resnet20_adversarial_skip_bn_bias_pgd/trajectories/buffer_proj.npz
 python plot.py --result_folder results_final/resnet20_skip_bn_bias/figures/  --surface_file results_final/resnet20_skip_bn_bias/loss_surface/buffer_loss_surface_test_loaded_pgd_eps5e-02_alpha5e-02_iters2e+01_21,-2,2.npz --plot_prefix resnet20_freq_dir_test_loaded_pgd_eps5e-02_alpha5e-02_iters2e+01_21,-2,2
 
+
 # vanilla
-python compute_trajectory.py -r results_final/resnet20_skip_bn_bias/trajectories --direction_file results_final/resnet20_skip_bn_bias/pca_directions.npz --projection_file pca_proj.npz --model resnet20  -s results_final/resnet20_skip_bn_bias/ckpt --skip_bn_bias
+python create_directions.py --statefile_folder results/resnet20_skip_bn_bias/ckpt/ -r results/resnet20_skip_bn_bias --skip_bn_bias --direction_file pca_directions.npz --direction_style "pca" --model resnet20
+  
+python compute_trajectory.py -r results/resnet20_skip_bn_bias/trajectories --direction_file results/resnet20_skip_bn_bias/pca_directions.npz --projection_file pca_proj.npz --model resnet20  -s results/resnet20_skip_bn_bias/ckpt --skip_bn_bias
 
 python compute_loss_surface.py --model_folder results_final/resnet20_skip_bn_bias  --adversarial_folder results_final/resnet20_skip_bn_bias -s results_final/resnet20_skip_bn_bias/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results_final/resnet20_skip_bn_bias/pca_directions.npz --device cuda:0  --xcoords 50:-30:45 --ycoords 50:-30:45 --use_attack
 
@@ -153,7 +183,41 @@ python plot.py --result_folder results_final/resnet20_adversarial_skip_bn_bias_p
 
 python plot_3d.py --result_folder results_final/resnet20_adversarial_skip_bn_bias_pgd/figures_final_linear_color_3d/  --surface_file results_final/resnet20_adversarial_skip_bn_bias_pgd/loss_surface/pca_loss_surface_train_vanilla_50,-30,45.npz --plot_prefix resnet20_3d_pca_dir_train_vanilla_50,-30,45_trajectory --trajectory_file results_final/resnet20_adversarial_skip_bn_bias_pgd/trajectories/pca_proj.npz --x_uplim 45 --x_lowlim -30 --y_uplim 45 --y_lowlim -30 --zlim 15
 
+# vanilla (swag)
+python create_directions.py --statefile_folder results/resnet20_skip_bn_bias_swag/ckpt/ -r results/resnet20_skip_bn_bias_swag --skip_bn_bias --direction_file pca_directions.npz --direction_style "pca" --model resnet20
+  
+python compute_trajectory.py -r results/resnet20_skip_bn_bias_swag/trajectories --direction_file results/resnet20_skip_bn_bias_swag/pca_directions.npz --projection_file pca_proj.npz --model resnet20  -s results/resnet20_skip_bn_bias_swag/ckpt --skip_bn_bias
 
-## 30 to -15
+python compute_loss_surface.py --model_folder results/resnet20_skip_bn_bias_swag -s results/resnet20_skip_bn_bias_swag/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results/resnet20_skip_bn_bias_swag/pca_directions.npz --device cuda:0  --xcoords 50:-30:45 --ycoords 50:-30:45 --use_attack --data_root_dir results/resnet20_skip_bn_bias_swag/adversarial_data
 
+python compute_loss_surface.py --model_folder results/resnet20_skip_bn_bias_swag -s results/resnet20_skip_bn_bias_swag/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results/resnet20_skip_bn_bias_swag/pca_directions.npz --device cuda:0  --xcoords 50:-30:45 --ycoords 50:-30:45 
 
+python plot.py --result_folder results/resnet20_skip_bn_bias_swag/figures/  --surface_file results/resnet20_skip_bn_bias_swag/loss_surface/pca_loss_surface_train_adversarial_50,-30,45.npz --plot_prefix resnet20_pca_loss_surface_train_adversarial_50,-30,45 --trajectory_file results/resnet20_skip_bn_bias_swag/trajectories/pca_proj.npz
+
+python plot.py --result_folder results/resnet20_skip_bn_bias_swag/figures/  --surface_file results/resnet20_skip_bn_bias_swag/loss_surface/pca_loss_surface_train_vanilla_50,-30,45.npz --plot_prefix resnet20_pca_loss_surface_train_vanilla_50,-30,45 --trajectory_file results/resnet20_skip_bn_bias_swag/trajectories/pca_proj.npz
+
+python plot_3d.py --result_folder results/resnet20_skip_bn_bias_swag/figures_linear_color_3d  --surface_file results/resnet20_skip_bn_bias_swag/loss_surface/pca_loss_surface_train_vanilla_50,-30,45.npz --plot_prefix resnet20_3d_pca_loss_surface_train_vanilla_50,-30,45 --trajectory_file results/resnet20_adversarial_skip_bn_bias_swag/trajectories/pca_proj.npz --x_uplim 45 --x_lowlim -30 --y_uplim 45 --y_lowlim -30 --zlim 20 --use_log_scale
+
+# vanilla 
+python create_directions.py --statefile results/resnet20_skip_bn_bias_swag_diag/ckpt/200_model.pt -r results/resnet20_skip_bn_bias_swag_diag --skip_bn_bias --direction_file random_directions.npz --direction_style "random" --model resnet20 
+
+python compute_trajectory.py -r results/resnet20_skip_bn_bias_swag/trajectories --direction_file results/resnet20_skip_bn_bias_swag/random_directions.npz --projection_file random_proj.npz --model resnet20  -s results/resnet20_skip_bn_bias_swag/ckpt --skip_bn_bias
+
+python compute_loss_surface.py --model_folder results/resnet20_skip_bn_bias_swag_diag -s results/resnet20_skip_bn_bias_swag_diag/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results/resnet20_skip_bn_bias_swag_diag/pca_directions.npz --device cuda:0  --xcoords 50:-30:45 --ycoords 50:-30:45
+
+python plot.py --result_folder results/resnet20_skip_bn_bias_swag/figures/  --surface_file results/resnet20_skip_bn_bias_swag_diag/loss_surface/pca_loss_surface_train_vanilla_5,-30,45.npz --plot_prefix resnet20_pca_loss_surface_train_vanilla_5,-30,45 --trajectory_file results/resnet20_skip_bn_bias_swag_diag/trajectories/pca_proj.npz
+
+python plot_3d.py --result_folder results/resnet20_skip_bn_bias/figures_linear_color_3d/  --surface_file results/resnet20_skip_bn_bias/loss_surface/pca_loss_surface_train_vanilla_5,-30,45.npz --plot_prefix resnet20_3d_pca_loss_surface_train_vanilla_log --trajectory_file results/resnet20_skip_bn_bias/trajectories/pca_proj.npz --x_uplim 45 --x_lowlim -30 --y_uplim 45 --y_lowlim -30 --zlim 15
+
+# adversarial 
+python create_directions.py --statefile results/resnet20_adversarial_skip_bn_bias_swag/ckpt/200_model.pt -r results/resnet20_adversarial_skip_bn_bias_swag --skip_bn_bias --direction_file random_directions.npz --direction_style "random" --model resnet20 
+
+python compute_trajectory.py -r results/resnet20_adversarial_skip_bn_bias_swag/trajectories --direction_file results/resnet20_adversarial_skip_bn_bias_swag/random_directions.npz --projection_file random_proj.npz --model resnet20  -s results/resnet20_adversarial_skip_bn_bias_swag/ckpt --skip_bn_bias
+
+python compute_loss_surface.py --model_folder results/resnet20_adversarial_skip_bn_bias_swag -s results/resnet20_adversarial_skip_bn_bias_swag/swag_ckpt/200_swag_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results/resnet20_adversarial_skip_bn_bias_swag/random_directions.npz --device cuda:0  --xcoords 50:-1:1 --ycoords 50:-1:1 --use_swag_model --swag_num_samples 30 --swag_scale 1.0 --use_attack --data_root_dir results/resnet20_adversarial_skip_bn_bias_swag/adversarial_data
+
+python compute_loss_surface.py --model_folder results/resnet20_adversarial_skip_bn_bias_swag -s results/resnet20_adversarial_skip_bn_bias_swag/ckpt/200_model.pt --batch_size 1000 --skip_bn_bias --model resnet20  --direction_file results/resnet20_adversarial_skip_bn_bias_swag/pca_directions.npz --device cuda:0  --xcoords 50:-30:45 --ycoords 50:-30:45 --use_attack --data_root_dir results/resnet20_adversarial_skip_bn_bias_swag/adversarial_data
+
+python plot.py --result_folder results/resnet20_adversarial_skip_bn_bias_swag/figures/  --surface_file results/resnet20_adversarial_skip_bn_bias_swag/loss_surface/random_loss_surface_train_vanilla_50,-1,1_swag_30ns_1.0e+00s_1.0e-05vc.npz --plot_prefix resnet20_random_loss_surface_train_vanilla_50,-1,1_swag_30ns_1.0e+00s_1.0e-05vc --trajectory_file results/resnet20_adversarial_skip_bn_bias_swag/trajectories/random_proj.npz
+
+python plot_3d.py --result_folder results/resnet20_adversarial_skip_bn_bias_swag/figures_linear_color_3d/  --surface_file results/resnet20_adversarial_skip_bn_bias_swag/loss_surface/random_loss_surface_train_vanilla_50,-1,1_swag_30ns_1.0e+00s_1.0e-05vc.npz --plot_prefix resnet20_3d_random_loss_surface_train_vanilla_50,-1,1_swag_30ns_1.0e+00s_1.0e-05vc_log --x_uplim 1 --x_lowlim -1 --y_uplim 1 --y_lowlim -1 --zlim 20

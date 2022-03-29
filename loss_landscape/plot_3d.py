@@ -43,6 +43,7 @@ if __name__ == '__main__':
     parser.add_argument("--y_uplim", required=True, help="y uplim for plotting", type=float, default=30)
     parser.add_argument("--y_lowlim", required=True, help="y lowlim for plotting", type=float, default=-10)
     parser.add_argument("--zlim", required=True, help="zlim for plotting", type=int, default=15)
+    parser.add_argument("--use_log_scale", action="store_true", default=False)
 
     args = parser.parse_args()
 
@@ -50,8 +51,13 @@ if __name__ == '__main__':
     log_alpha = -5
     N = 30
 
+    if args.use_log_scale:
+        result_folder = args.result_folder + '_log'
+    else:
+        result_folder = args.result_folder
+        
     # set up logging
-    os.makedirs(f"{args.result_folder}", exist_ok=True)
+    os.makedirs(f"{result_folder}", exist_ok=True)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     logger = logging.getLogger()
     if args.debug:
@@ -64,6 +70,9 @@ if __name__ == '__main__':
         xcoords = data["xcoordinates"]
         ycoords = data["ycoordinates"]
         losses = data["losses"]
+        if args.use_log_scale:
+            losses = np.log(losses)
+            
         acc = data["accuracies"]
 
         xcoords_within = xcoords[(args.x_uplim > xcoords) & (args.x_lowlim < xcoords)]
@@ -76,27 +85,41 @@ if __name__ == '__main__':
         Z[Z > args.zlim] = args.zlim
 
         data_max, data_min = np.amax(Z), np.amin(Z)
+        if args.use_log_scale:
+            norm = colors.Normalize(vmin=-5, vmax=7)
+        else:
+            norm = colors.Normalize(vmin=0, vmax=args.zlim)
+            # log_gamma = (np.log(data_max - data_min) - log_alpha) / N
+            # levels = data_min + np.exp(log_alpha + log_gamma * np.arange(N + 1))
+            # levels[0] = data_min
+            # levels[-1] = data_max
+            # norm = LogNormalize(1e-8, 7, log_alpha=log_alpha)
 
-        log_gamma = (np.log(data_max - data_min) - log_alpha) / N
-        levels = data_min + np.exp(log_alpha + log_gamma * np.arange(N + 1))
-        levels[0] = data_min
-        levels[-1] = data_max
-        norm = LogNormalize(data_min - 1e-8, data_max + 1e-8, log_alpha=log_alpha)
-
-        CS = ax.plot_surface(X, Y, Z, cmap='jet_r', norm=colors.Normalize(vmin=0, vmax=args.zlim), alpha=0.7)  # 
+        zlim_up = np.min([args.zlim, np.max(Z)])
+        
+        if args.use_log_scale:
+            zlim_low = np.min(Z)
+        else:
+            zlim_low = 0
+        zlim_low_ticks = np.min(Z)
+        
+        origin_clip_tick = Z[np.argmin(np.abs(xcoords_within))][np.argmin(np.abs(ycoords_within))]
+        origin_unclipped_tick = losses[np.argmin(np.abs(xcoords))][np.argmin(np.abs(ycoords))]
+        CS = ax.plot_surface(X, Y, Z, cmap='jet_r', norm=norm, alpha=0.7)  
 
         ax.set_xticks([0])
         ax.set_yticks([0])
-        ax.set_zticks([round(np.min(Z), 2), args.zlim])
+        ax.set_zticks([zlim_low_ticks, zlim_up])
+        ax.set_title(f"Loss at the origin: {origin_unclipped_tick:.2f}")
 
-        ax.set_zlim(0, args.zlim)
+        ax.set_zlim(zlim_low, zlim_up)
         ax.view_init(elev=20., azim=0)
         fig.savefig(
-            f"{args.result_folder}/{args.plot_prefix}_surface_2d_contour_level{loss_level_diff:.0e}_zlim{args.zlim}",
+            f"{result_folder}/{args.plot_prefix}_surface_2d_contour_level{loss_level_diff:.0e}_zlim{args.zlim}.jpg",
             dpi=300,
             bbox_inches='tight'
         )
-        file_name = f"{args.result_folder}/{args.plot_prefix}_3d_contour_level{loss_level_diff:.0e}_zlim{args.zlim}.gif"
+        file_name = f"{result_folder}/{args.plot_prefix}_3d_contour_level{loss_level_diff:.0e}_zlim{args.zlim}.gif"
 
         anim = animation.FuncAnimation(fig, animate, frames=180, blit=True)
         anim.save(file_name, fps=360, dpi=200, writer='imagemagick')

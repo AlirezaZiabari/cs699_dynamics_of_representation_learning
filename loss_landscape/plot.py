@@ -11,14 +11,14 @@ import matplotlib.colors as colors
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-D", "--debug", action='store_true')
-    parser.add_argument("--result_folder", "-r", required=True)
-    parser.add_argument("--trajectory_file", required=False, default=None)
-    parser.add_argument("--surface_file", required=False, default=None)
-    parser.add_argument("--plot_prefix", required=True, help="prefix for the figure names")
+    parser.add_argument("--result_folder", "-r", required=False, default=r'C:\Users\berkt\Desktop\cs699_dynamics_of_representation_learning\loss_landscape\results\resnet20_skip_bn_bias_swag_diag\figures')
+    parser.add_argument("--trajectory_file", required=False, default=r'C:\Users\berkt\Desktop\cs699_dynamics_of_representation_learning\loss_landscape\results\resnet20_skip_bn_bias_swag_diag\trajectories\pca_proj.npz')
+    parser.add_argument("--surface_file", required=False, default=r'C:\Users\berkt\Desktop\cs699_dynamics_of_representation_learning\loss_landscape\results\resnet20_skip_bn_bias_swag_diag\loss_surface\pca_loss_surface_train_vanilla_6,-30,45.npz')
+    parser.add_argument("--plot_prefix", required=False, help="", default=r'resnet20_pca_loss_surface_train_vanilla_6,-30,45')
 
     args = parser.parse_args()
 
-    loss_level_diff = 0.005
+    loss_level_diff = 0.1
     log_alpha = -5
     N = 30
     
@@ -56,7 +56,7 @@ if __name__ == '__main__':
         pyplot.ylabel('PCA 2 Coefficient')
     
         fig.savefig(
-            f"{args.result_folder}/{args.plot_prefix}_surface_2d_contour_level{loss_level_diff:.0e}", dpi=300,
+            f"{args.result_folder}/{args.plot_prefix}_surface_2d_contour_level{loss_level_diff:.0e}.jpg", dpi=300,
             bbox_inches='tight'
         )
         pyplot.close()
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     
         
         fig.savefig(
-            f"{args.result_folder}/{args.plot_prefix}_trajectory_2d", dpi=300,
+            f"{args.result_folder}/{args.plot_prefix}_trajectory_2d.jpg", dpi=300,
             bbox_inches='tight'
         )
         pyplot.close()
@@ -123,7 +123,7 @@ if __name__ == '__main__':
     
         # colorbar = pyplot.colorbar(TJ)
         fig.savefig(
-            f"{args.result_folder}/{args.plot_prefix}_trajectory+contour_2d_level{loss_level_diff:.0e}", dpi=300,
+            f"{args.result_folder}/{args.plot_prefix}_trajectory+contour_2d_level{loss_level_diff:.0e}.jpg", dpi=300,
             bbox_inches='tight'
         )
         pyplot.close()

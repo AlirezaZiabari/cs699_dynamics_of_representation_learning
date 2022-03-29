@@ -4,6 +4,7 @@ Code to compute directions
 """
 
 import argparse
+from email.policy import default
 import logging
 import os
 import sys
@@ -24,7 +25,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--device", required=False, default="cuda" if torch.cuda.is_available() else "cpu"
     )
-    parser.add_argument("--result_folder", "-r", required=True)
+    parser.add_argument("--result_folder", "-r", required=False, default=r'C:\Users\berkt\Desktop\cs699_dynamics_of_representation_learning\loss_landscape\results\resnet20_skip_bn_bias_swag_diag')
 
     # model related arguments
     parser.add_argument(
@@ -32,21 +33,21 @@ if __name__ == '__main__':
         help="required to compute random directions"
     )
     parser.add_argument(
-        "--statefile_folder", required=False, default=None,
+        "--statefile_folder", required=False, default=r'C:\Users\berkt\Desktop\cs699_dynamics_of_representation_learning\loss_landscape\results\resnet20_skip_bn_bias_swag_diag\ckpt',
         help="required for computing PCA directions"
     )
-    parser.add_argument("--skip_bn_bias", action="store_true")
+    parser.add_argument("--skip_bn_bias", action="store_true", default=True)
     parser.add_argument(
-        "--model", required=True, choices=["resnet20", "resnet32", "resnet44", "resnet56"]
+        "--model", required=False, choices=["resnet20", "resnet32", "resnet44", "resnet56"], default='resnet20'
     )
     parser.add_argument("--remove_skip_connections", action="store_true", default=False)
 
     parser.add_argument("--batch_size", required=False, type=int, default=128)
     parser.add_argument(
-        "--direction_file", required=True, type=str, help="file name to store directions"
+        "--direction_file", required=False, type=str, help="file name to store directions", default='pca_directions.npz'
     )
     parser.add_argument(
-        "--direction_style", required=True, type=str,
+        "--direction_style", required=False, type=str, default='pca',
         choices=["random", "pca", "frequent_directions"]
     )
 

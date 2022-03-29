@@ -17,15 +17,21 @@ from utils.resnet import set_resnet_weights
 
 logger = logging.getLogger()
 
-
-def get_loss_value(model, loader, device, attack_type, eps, alpha, iterations):
+def get_loss_value(model_list, loader, device, attack_type=None, eps=0.05, alpha=0.05, iterations=20):
+    
     """
     Evaluation loop for the multi-class classification problem.
 
     return (loss, accuracy)
     """
-
-    model.eval()
+    if not isinstance(model_list, list):
+        model_list = [model_list]
+    
+    for model in model_list:
+        model.eval()
+    
+    num_models = len(model_list)
+    
     losses = []
     accuracies = []
 
@@ -34,30 +40,47 @@ def get_loss_value(model, loader, device, attack_type, eps, alpha, iterations):
         labels = labels.to(device)
 
         if attack_type is not None:
+            # TODO: which model should we do the attack on?
             images = attack_model(attack_type, model, images, labels, device,
-                                  eps, alpha, iterations)
+                                eps, alpha, iterations)
+            
         # Forward pass, vanilla
-        outputs = model(images)
-        loss = torch.nn.functional.cross_entropy(outputs, labels, reduce=None).detach()
+        outputs = None
+        for model in model_list:
+            model = model.to(device)
+            if outputs is None:
+                outputs = torch.nn.functional.softmax(model(images), dim=1) / num_models
+            else:
+                outputs += torch.nn.functional.softmax(model(images), dim=1) / num_models
+        
+        log_outputs = torch.nan_to_num(torch.log(outputs), neginf=-500)
+        
+        loss =  torch.nn.functional.nll_loss(log_outputs, labels, reduce=None).detach()
+
         losses.append(loss.reshape(-1))
 
         acc = (torch.argmax(outputs, dim=1) == labels).float().detach()
         accuracies.append(acc.reshape(-1))
 
-    losses = torch.cat(losses, dim=0).mean().cpu().data.numpy()
-    accuracies = torch.cat(accuracies, dim=0).mean().cpu().data.numpy()
+    loss = torch.cat(losses, dim=0).mean().cpu().data.numpy()
+    accuracy = torch.cat(accuracies, dim=0).mean().cpu().data.numpy()
+    
+    return loss, accuracy
 
-    return losses, accuracies
 
 
-def get_loss_value_for_saved_data(model, path, device):
+def get_loss_value_for_saved_data(model_list, path, device):
     """
     Evaluation loop for the multi-class classification problem.
 
     return (loss, accuracy)
     """
 
-    model.eval()
+    for model in model_list:
+        model.eval()
+    
+    num_models = len(model_list)
+    
     losses = []
     accuracies = []
     list_dir = os.listdir(path)
@@ -67,17 +90,23 @@ def get_loss_value_for_saved_data(model, path, device):
         labels = labels.to(device)
 
         # Forward pass, vanilla
-        outputs = model(images)
+        outputs = None
+        for model in model_list:
+            if outputs is None:
+                outputs = torch.nn.functional.softmax(model(images), dim=1) / num_models
+            else:
+                outputs += torch.nn.functional.softmax(model(images), dim=1) / num_models
+        
         loss = torch.nn.functional.cross_entropy(outputs, labels, reduce=None).detach()
         losses.append(loss.reshape(-1))
 
         acc = (torch.argmax(outputs, dim=1) == labels).float().detach()
         accuracies.append(acc.reshape(-1))
 
-    losses = torch.cat(losses, dim=0).mean().cpu().data.numpy()
-    accuracies = torch.cat(accuracies, dim=0).mean().cpu().data.numpy()
-
-    return losses, accuracies
+    loss = torch.cat(losses, dim=0).mean().cpu().data.numpy()
+    accuracy = torch.cat(accuracies, dim=0).mean().cpu().data.numpy()
+    
+    return loss, accuracy
 
 
 def get_PCA_directions(model: nn.Module, state_files, skip_bn_bias):

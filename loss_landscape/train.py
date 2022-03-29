@@ -28,6 +28,8 @@ from utils.nn_manipulation import count_params, flatten_grads
 from utils.reproducibility import set_seed
 from utils.resnet import get_resnet
 
+from swag.posteriors.swag import SWAG
+
 from adversarial_attack import attack_model
 
 
@@ -58,7 +60,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument("--ckpt_load", required=False, type=int, default=0)
-
+    
     parser.add_argument("--attack_type", required=False, type=str, default=None)
     parser.add_argument("--attack_eps", required=False, type=float, default=0.05)  # 2 for pgd_l2, 0.05 for pgd
     parser.add_argument("--attack_alpha", required=False, type=float, default=0.05)  # 0.2 for pgd_l2, 0.05 for pgd
@@ -66,7 +68,10 @@ if __name__ == "__main__":
 
     parser.add_argument("--num_epochs", required=False, type=int, default=200)
     parser.add_argument("--lr", required=False, type=float, default=0.1)
-
+    
+    parser.add_argument("--save_swag_model", required=False, action='store_true', default=False)
+    parser.add_argument("--use_swag_diag_cov", required=False, action='store_true', default=False)
+    
     args = parser.parse_args()
     print('--------------------------------------')
     print('Training will start with following arguments:')
@@ -76,6 +81,9 @@ if __name__ == "__main__":
 
     # set up logging
     os.makedirs(f"{args.result_folder}/ckpt", exist_ok=True)
+    if args.save_swag_model:
+        os.makedirs(f"{args.result_folder}/swag_ckpt", exist_ok=True)
+        
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     logger = logging.getLogger()
     if args.debug:
@@ -137,6 +145,12 @@ if __name__ == "__main__":
     step = 0
     direction_time = 0
 
+    if args.save_swag_model:
+        swag_model = SWAG(get_resnet(args.model), 
+                          num_classes=10, remove_skip_connections=args.remove_skip_connections, 
+                          no_cov_mat=args.use_swag_diag_cov, max_num_models=args.num_epochs)
+        swag_model.to(args.device)
+        
     for epoch in range(args.num_epochs):
         model.train()
         for i, (images, labels) in enumerate(train_loader):
@@ -178,7 +192,10 @@ if __name__ == "__main__":
                 logger.info(
                     f"Epoch [{epoch}/{args.num_epochs}], Step [{step}/{total_step}] Train Loss: {loss.item():.4f}"
                 )
-
+                
+        if args.save_swag_model:
+            swag_model.collect_model(model)
+            
         scheduler.step()
 
         # Save the model checkpoint
@@ -191,8 +208,17 @@ if __name__ == "__main__":
                 model.state_dict(), f'{args.result_folder}/ckpt/{save_name}_model.pt',
                 pickle_module=dill
             )
-
-        loss, acc = get_loss_value(model, test_loader, args.device,
+            
+        if args.save_swag_model:
+            save_name = f'{epoch + 1}_swag_model'
+            if args.use_swag_diag_cov:
+                save_name += '_diag'
+            torch.save(
+                        swag_model.state_dict(), f'{args.result_folder}/swag_ckpt/{save_name}.pt',
+                        pickle_module=dill
+                    )
+            
+        loss, acc = get_loss_value([model], test_loader, args.device,
                                    attack_type=args.attack_type, eps=args.attack_eps,
                                    alpha=args.attack_alpha, iterations=args.attack_iters)
         logger.info(f'Accuracy of the model on the test images: {100 * acc}%')
@@ -234,3 +260,5 @@ if __name__ == "__main__":
         f"{args.result_folder}/buffer_last_1.npy",
         buffer=buffer.cpu().data.numpy(), direction1=directions[0], direction2=directions[1]
     )
+    
+    
