@@ -11,6 +11,8 @@ import ssl
 import copy
 from swag.posteriors.swag import SWAG
 from swag.utils import bn_update
+from adversarial_attack import load_swag_models
+from utils import swag_config
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -33,7 +35,7 @@ def test_model(model, device, data_root_dir=None, batch_size=1, use_adversarial_
     
 def test_swag_model(swag_model, model, device, batch_size=1, 
                     num_samples=10, scale=1, diag_cov=True,
-                    data_root_dir=None, use_adversarial_saved_data=False, train_data=False):
+                    data_root_dir=None, use_adversarial_saved_data=False, train_data=False, swag_samples_path=None):
     '''
     Gets samples from SWAG model and tests it on either vanilla data or pre-saved adversarial data. 
     Adversarial data is saved by using save_adversarial_images(...) function under load_data.py, the trained model from final epoch is used
@@ -70,13 +72,17 @@ def test_swag_model(swag_model, model, device, batch_size=1,
     bn_update(loader, swag_model, verbose=True, subset=0.1)
     
     model_list = []
-    for _ in range(num_samples):
-        # sample swag model and update batchnorm statistics
-        swag_model.sample(scale=scale, cov=not diag_cov)
-        bn_update(loader, swag_model, verbose=True, subset=0.1)
-        
-        set_weights_from_swag_base(model, swag_model.base)
-        model_list.append(copy.deepcopy(model))
+    if swag_samples_path:
+        model_list = load_swag_models(swag_samples_path, model, device)
+    else:
+        for _ in range(num_samples):
+            # sample swag model and update batchnorm statistics
+            swag_model.sample(scale=scale, cov=not diag_cov)
+            bn_update(loader, swag_model, verbose=True, subset=0.1)
+            
+            set_weights_from_swag_base(model, swag_model.base)
+            model_list.append(copy.deepcopy(model))
+    
     
     _, accuracy = get_loss_value(model_list, loader, device)
     
@@ -112,10 +118,9 @@ if __name__ == '__main__':
     parser.add_argument("--attack_iters", required=False, type=int, default=20)
     
     parser.add_argument("--use_swag_model", required=False, action='store_true', default=False)
-    parser.add_argument("--use_swag_diag_cov", required=False, action='store_true', default=False)
-    parser.add_argument("--swag_scale", required=False, type=float, default=1)
-    parser.add_argument("--swag_num_samples", required=False, type=int, default=30)
-    parser.add_argument("--swag_var_clamp", required=False, type=float, default=1e-5)
+    parser.add_argument("--swag_samples_path", required=False, type=str)
+    
+    parser.add_argument
 
     args = parser.parse_args()
     
@@ -129,18 +134,18 @@ if __name__ == '__main__':
         
         swag_model = SWAG(get_resnet(args.model), 
                           num_classes=10, remove_skip_connections=args.remove_skip_connections, 
-                          no_cov_mat=args.use_swag_diag_cov, max_num_models=args.ckpt_load, var_clamp=args.swag_var_clamp)
+                          no_cov_mat=swag_config.USE_DIAG_COV, max_num_models=args.ckpt_load, var_clamp=swag_config.VAR_CLIP)
         
         load_path = f"{args.result_folder}/swag_ckpt/{args.ckpt_load}_swag_model"
-        if args.use_swag_diag_cov:
+        if swag_config.USE_DIAG_COV:
             load_path += '_diag'
             
         state_dict = torch.load(f"{load_path}.pt", map_location=args.device)
         swag_model.load_state_dict(state_dict)
         swag_model.to(args.device)
         test_swag_model(swag_model=swag_model, model=model, device=args.device, data_root_dir=args.data_root_dir, batch_size=args.batch_size, 
-                        num_samples=args.swag_num_samples, scale=args.swag_scale, diag_cov=args.use_swag_diag_cov,
-                        use_adversarial_saved_data=args.use_adversarial_saved_data, train_data=args.train_data)
+                        num_samples=swag_config.NUM_SAMPLES, scale=swag_config.SCALE, diag_cov=swag_config.USE_DIAG_COV,
+                        use_adversarial_saved_data=args.use_adversarial_saved_data, train_data=args.train_data, swag_samples_path=args.swag_samples_path)
         
     else:
         model = get_resnet(args.model)(

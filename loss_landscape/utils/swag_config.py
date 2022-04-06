@@ -1,0 +1,4 @@
+NUM_SAMPLES = 30
+SCALE = 1
+USE_DIAG_COV = False
+VAR_CLIP = 1e-5
