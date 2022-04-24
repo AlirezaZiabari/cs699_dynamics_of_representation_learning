@@ -12,7 +12,7 @@ from utils import swag_config
 
 
 def save_adversarial_images(model_list, loader, save_folder, save_name, device, attack_type='pgd', eps=0.05,
-                            alpha=0.05, iterations=20):
+                            alpha=0.05, iterations=20, attack_all=False):
     os.makedirs(save_folder, exist_ok=True)
     model.to(device)
     model.eval()
@@ -24,7 +24,7 @@ def save_adversarial_images(model_list, loader, save_folder, save_name, device, 
         images = images.to(device)
         labels = labels.to(device)
 
-        images = attack_model(attack_type, model_list, images, labels, device, eps, alpha, iterations)
+        images = attack_model(attack_type, model_list, images, labels, device, eps, alpha, iterations, attack_all=attack_all)
 
         pred_labels = model(images).argmax(axis=1).detach().cpu()
         all_pred_labels.append(pred_labels)
@@ -136,6 +136,7 @@ if __name__ == '__main__':
     remove_skip_connections = False
     
     use_swag_models = True
+    attack_all = False
     
     train_loader, test_loader = get_dataloader(batch_size=1)
     
@@ -186,5 +187,5 @@ if __name__ == '__main__':
     
     # print(get_loss_value(model_list, loader, device, attack_type=None, eps=0.05, alpha=0.05, iterations=20))
     save_adversarial_images(model_list=model_list, loader=loader, save_folder=save_adversarial_folder, 
-                            save_name='adversarial_image', device=device)
+                            save_name='adversarial_image', device=device, attack_all=attack_all)
    
