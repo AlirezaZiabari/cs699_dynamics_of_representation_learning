@@ -39,9 +39,12 @@ def save_adversarial_images(model_list, loader, save_folder, save_name, device, 
     print(f"Accuracy of the model on the test images with {attack_type} attack: {100 * acc}%")
 
 
-def attack_model(attack_type, model_list, images, labels, device, eps=0.05, alpha=0.05, iters=40):
+def attack_model(attack_type, model_list, images, labels, device, eps=0.05, alpha=0.05, iters=40, attack_all=False):
     if attack_type == 'pgd':
-        images = pgd_attack_on_best_model(model_list, images, labels, eps=eps, alpha=alpha, iterations=iters, device=device)
+        if attack_all:
+            images = pgd_attack_on_all_model(model_list, images, labels, eps=eps, alpha=alpha, iterations=iters, device=device)
+        else:
+            images = pgd_attack_on_best_model(model_list, images, labels, eps=eps, alpha=alpha, iterations=iters, device=device)
     else:
         assert True, 'Attack is unavailable, Using vanilla images'
     return images
