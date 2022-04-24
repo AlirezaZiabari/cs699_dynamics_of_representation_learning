@@ -71,6 +71,30 @@ def pgd_attack_on_best_model(model_list, images, labels, eps=0.1, alpha=2 / 255,
 
     return images
 
+def pgd_attack_on_all_model(model_list, images, labels, eps=0.1, alpha=2 / 255, iterations=40, device='cpu'):
+    
+    if not isinstance(model_list, list):
+        model_list = [model_list]
+    
+    ori_images = images.data
+
+    for _ in range(iterations):
+        images.requires_grad = True
+        loss = 0
+        for i, model in enumerate(model_list):
+            outputs = model(images)
+            model.zero_grad()
+            loss += torch.nn.functional.cross_entropy(outputs.to(device), labels)
+
+        # print(costs, cost)
+        loss.backward()
+
+        adv_images = images + alpha * images.grad.sign()
+        eta = torch.clamp(adv_images - ori_images, min=-eps, max=eps)
+        images = (ori_images + eta).detach_()
+
+    return images
+
 def save_swag_models(model, swag_model, loader, swag_num_samples, swag_scale, use_swag_diag_cov, save_dir):
     os.makedirs(save_dir, exist_ok=True)
     
